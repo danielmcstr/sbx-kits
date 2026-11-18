@@ -97,13 +97,13 @@ Each kit uses `# syntax=docker/sandbox-kit:3`, enabling direct builds with Build
 
 ```bash
 # Build kit images
-docker buildx build -f kits/antigravity-kit-v3/antigravity.yaml -t your-org/sbx-kit-antigravity:latest --push .
-docker buildx build -f kits/python-ml-mixin/python-ml.yaml -t your-org/sbx-kit-python-ml:latest --push .
-docker buildx build -f kits/colab-mixin/colab.yaml -t your-org/sbx-kit-colab:latest --push .
-docker buildx build -f kits/kaggle-mixin/kaggle.yaml -t your-org/sbx-kit-kaggle:latest --push .
+docker buildx build -f kits/antigravity-kit-v3/antigravity.yaml -t danielmcstr/sbx-kit-antigravity:latest --push .
+docker buildx build -f kits/python-ml-mixin/python-ml.yaml -t danielmcstr/sbx-kit-python-ml:latest --push .
+docker buildx build -f kits/colab-mixin/colab.yaml -t danielmcstr/sbx-kit-colab:latest --push .
+docker buildx build -f kits/kaggle-mixin/kaggle.yaml -t danielmcstr/sbx-kit-kaggle:latest --push .
 
 # Build and publish the master set
-docker buildx build -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml -t your-org/sbx-kit-agy-colab-kaggle:latest --push .
+docker buildx build -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml -t danielmcstr/sbx-kit-agy-colab-kaggle:latest --push .
 ```
 
 ### 5. In-Sandbox Verification
