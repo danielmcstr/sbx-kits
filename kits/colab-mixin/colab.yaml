@@ -1,0 +1,32 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: mixin
+displayName: Google Colab Mixin
+description: Mixin providing Google Colab CLI, headless keyring configuration, and colab-operator skill.
+
+provides:
+  - colab
+
+capabilities:
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/colab-mixin/skills/colab-operator
+      name: colab-operator
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - colab.research.google.com
+          - accounts.google.com
+          - oauth2.googleapis.com
+          - pypi.org
+          - files.pythonhosted.org
+  - type: com.docker.sandbox/credential@1
+    description: Google Colab OAuth credential exchange
+    config:
+      service: google-colab
+      phase: runtime
+      oauth:
+        tokenEndpoint: https://oauth2.googleapis.com/token
+        resourceHosts:
+          - colab.research.google.com

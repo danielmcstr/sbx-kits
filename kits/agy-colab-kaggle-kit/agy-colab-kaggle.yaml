@@ -1,0 +1,11 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: set
+displayName: Antigravity Colab & Kaggle Kit Set
+description: Master composition set assembling the Antigravity v3 workload with python-ml-mixin, colab-mixin, and kaggle-mixin.
+
+kits:
+  - ref: ../antigravity-kit-v3
+  - ref: ../python-ml-mixin
+  - ref: ../colab-mixin
+  - ref: ../kaggle-mixin

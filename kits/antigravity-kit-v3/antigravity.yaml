@@ -1,0 +1,43 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: workload
+displayName: Antigravity Agent Workload (v3)
+description: Antigravity autonomous agent workload with skills discovery, git identity, and Gemini credentials.
+
+provides:
+  - antigravity
+  - agy
+
+capabilities:
+  - type: com.docker.sandbox/sbx@1
+  - type: com.docker.sandbox/git-identity@1
+  - type: com.docker.sandbox/agent-skills@1
+    config:
+      path: /home/agent/.gemini/config/skills
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      filename: AGENTS.md
+      content: |
+        You are operating inside an isolated Docker Sandbox environment.
+        Workspace directory is /home/agent/workspace.
+        Skills are dynamically linked into /home/agent/.gemini/config/skills.
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - generativelanguage.googleapis.com
+          - api.anthropic.com
+          - api.github.com
+          - github.com
+  - type: com.docker.sandbox/credential@1
+    description: Gemini API key for Antigravity agent
+    config:
+      service: gemini
+      phase: runtime
+      apiKey:
+        name: GEMINI_API_KEY
+        proxyManaged: true
+        inject:
+          - domain: generativelanguage.googleapis.com
+            header: x-goog-api-key
+            format: "%s"

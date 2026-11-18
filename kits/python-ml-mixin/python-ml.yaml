@@ -1,0 +1,23 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: mixin
+displayName: Python ML Toolchain Mixin
+description: Modular mixin supplying uv, ruff, jupytext, nbstripout, and notebook workflow skill.
+
+provides:
+  - uv
+  - ruff
+  - jupytext
+  - nbstripout
+
+capabilities:
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/python-ml-mixin/skills/notebook-uv-workflow
+      name: notebook-uv-workflow
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - pypi.org
+          - files.pythonhosted.org

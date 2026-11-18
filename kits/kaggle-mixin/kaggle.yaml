@@ -1,0 +1,36 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: mixin
+displayName: Kaggle Toolchain Mixin
+description: Mixin providing Kaggle CLI, official Kaggle agent skill, and proxy-managed credentials.
+
+provides:
+  - kaggle
+
+capabilities:
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/kaggle-mixin/skills/kaggle-cli
+      name: kaggle-cli
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - kaggle.com
+          - www.kaggle.com
+          - api.kaggle.com
+          - storage.googleapis.com
+          - pypi.org
+          - files.pythonhosted.org
+  - type: com.docker.sandbox/credential@1
+    description: Kaggle API token for Kaggle CLI operations
+    config:
+      service: kaggle
+      phase: runtime
+      apiKey:
+        name: KAGGLE_API_TOKEN
+        proxyManaged: true
+        inject:
+          - domain: api.kaggle.com
+            header: Authorization
+            format: "Bearer %s"
