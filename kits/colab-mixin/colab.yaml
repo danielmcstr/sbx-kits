@@ -27,6 +27,8 @@ capabilities:
       service: google-colab
       phase: runtime
       oauth:
-        tokenEndpoint: https://oauth2.googleapis.com/token
+        tokenEndpoint:
+          host: oauth2.googleapis.com
+          path: /token
         resourceHosts:
           - colab.research.google.com

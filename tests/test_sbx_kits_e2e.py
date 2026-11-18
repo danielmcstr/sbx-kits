@@ -211,13 +211,28 @@ def test_e2e_composition():
     refs = re.findall(r"-\s+ref:\s+([^\s]+)", set_content)
     assert len(refs) == 4, f"Expected 4 kit refs in master set, found {len(refs)}"
 
-    set_dir = set_yaml_path.parent
+    # Map published kit references to local workspace directories
+    ref_map = {
+        "docker.io/danielmcstr/sbx-kit-antigravity:latest": KITS_DIR / "antigravity-kit-v3",
+        "docker.io/danielmcstr/sbx-kit-python-ml:latest": KITS_DIR / "python-ml-mixin",
+        "docker.io/danielmcstr/sbx-kit-colab:latest": KITS_DIR / "colab-mixin",
+        "docker.io/danielmcstr/sbx-kit-kaggle:latest": KITS_DIR / "kaggle-mixin",
+        "docker.io/sbx/sbx-kit-antigravity:latest": KITS_DIR / "antigravity-kit-v3",
+        "docker.io/sbx/sbx-kit-python-ml:latest": KITS_DIR / "python-ml-mixin",
+        "docker.io/sbx/sbx-kit-colab:latest": KITS_DIR / "colab-mixin",
+        "docker.io/sbx/sbx-kit-kaggle:latest": KITS_DIR / "kaggle-mixin",
+    }
+
     resolved_kinds = {"workload": [], "mixin": []}
     all_provides = set()
     all_skills = []
 
     for ref in refs:
-        target_path = (set_dir / ref).resolve()
+        # Validate that set kit references do not use relative paths (SPEC-v3 requirement)
+        assert not ref.startswith(".") and not ref.startswith("/"), \
+            f"Set ref '{ref}' cannot be a relative or absolute path in v3 spec"
+        assert ref in ref_map, f"Unknown kit reference in set: {ref}"
+        target_path = ref_map[ref]
         assert target_path.is_dir(), f"Referenced kit does not exist: {target_path}"
         
         # Find yaml in target kit
