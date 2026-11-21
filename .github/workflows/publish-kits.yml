@@ -22,6 +22,9 @@ permissions:
 jobs:
   validate:
     name: Conformance Tests
+    if: >-
+      github.actor == github.repository_owner &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -33,6 +36,9 @@ jobs:
   build-kits:
     name: Build kit (${{ matrix.name }})
     needs: validate
+    if: >-
+      github.actor == github.repository_owner &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -99,7 +105,7 @@ jobs:
   build-set:
     name: Build master set (agy-colab-kaggle)
     needs: build-kits
-    if: github.event_name != 'pull_request'
+    if: github.actor == github.repository_owner && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
