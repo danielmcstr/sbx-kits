@@ -235,14 +235,10 @@ def test_e2e_composition():
 
     # Map published kit references to local workspace directories
     ref_map = {
-        "docker.io/danielmcstr/sbx-kit-antigravity:latest": KITS_DIR / "antigravity-kit-v3",
-        "docker.io/danielmcstr/sbx-kit-python-ml:latest": KITS_DIR / "python-ml-mixin",
-        "docker.io/danielmcstr/sbx-kit-colab:latest": KITS_DIR / "colab-mixin",
-        "docker.io/danielmcstr/sbx-kit-kaggle:latest": KITS_DIR / "kaggle-mixin",
-        "docker.io/sbx/sbx-kit-antigravity:latest": KITS_DIR / "antigravity-kit-v3",
-        "docker.io/sbx/sbx-kit-python-ml:latest": KITS_DIR / "python-ml-mixin",
-        "docker.io/sbx/sbx-kit-colab:latest": KITS_DIR / "colab-mixin",
-        "docker.io/sbx/sbx-kit-kaggle:latest": KITS_DIR / "kaggle-mixin",
+        "ghcr.io/danielmcstr/sbx-kits/antigravity:latest": KITS_DIR / "antigravity-kit-v3",
+        "ghcr.io/danielmcstr/sbx-kits/python-ml:latest": KITS_DIR / "python-ml-mixin",
+        "ghcr.io/danielmcstr/sbx-kits/colab:latest": KITS_DIR / "colab-mixin",
+        "ghcr.io/danielmcstr/sbx-kits/kaggle:latest": KITS_DIR / "kaggle-mixin",
     }
 
     resolved_kinds = {"workload": [], "mixin": []}

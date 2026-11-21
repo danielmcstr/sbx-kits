@@ -1,0 +1,140 @@
+name: Validate & Publish Sandbox Kits to GHCR
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate:
+    name: Conformance Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run E2E conformance suite
+        run: python3 tests/test_sbx_kits_e2e.py
+
+  build-kits:
+    name: Build kit (${{ matrix.name }})
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: antigravity
+            dir: kits/antigravity-kit-v3
+            file: antigravity.yaml
+          - name: python-ml
+            dir: kits/python-ml-mixin
+            file: python-ml.yaml
+          - name: colab
+            dir: kits/colab-mixin
+            file: colab.yaml
+          - name: kaggle
+            dir: kits/kaggle-mixin
+            file: kaggle.yaml
+          - name: playwright-mcp
+            dir: kits/playwright-mcp-mixin
+            file: playwright-mcp.yaml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx (docker-container driver)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract OCI metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.name }}
+          flavor: |
+            latest=auto
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build and push kit
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.dir }}
+          file: ./${{ matrix.dir }}/${{ matrix.file }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          annotations: |
+            index,manifest:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index,manifest:org.opencontainers.image.licenses=MIT
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  build-set:
+    name: Build master set (agy-colab-kaggle)
+    needs: build-kits
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx (docker-container driver)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract OCI metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/agy-colab-kaggle
+          flavor: |
+            latest=auto
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build and push master kit set
+        uses: docker/build-push-action@v6
+        with:
+          context: ./kits/agy-colab-kaggle-kit
+          file: ./kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          annotations: |
+            index,manifest:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index,manifest:org.opencontainers.image.licenses=MIT

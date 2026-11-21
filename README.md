@@ -58,12 +58,37 @@ sbx-kits/
 
 ## How to Use
 
-### 1. Prerequisites
+### 1. Quickstart (Published Images on GHCR)
+
+Run directly from the public GitHub Container Registry images without cloning this repository:
+
+```bash
+# Run the master composed set (Antigravity + Python ML + Colab + Kaggle)
+sbx run ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest \
+  --kit-arg auth_method=consumer \
+  .
+
+# Optionally add the Playwright MCP plugin mixin ad hoc
+sbx run ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest \
+  --kit ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest \
+  --kit-arg auth_method=consumer \
+  .
+```
+
+Published packages:
+- `ghcr.io/danielmcstr/sbx-kits/antigravity:latest`
+- `ghcr.io/danielmcstr/sbx-kits/python-ml:latest`
+- `ghcr.io/danielmcstr/sbx-kits/colab:latest`
+- `ghcr.io/danielmcstr/sbx-kits/kaggle:latest`
+- `ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest`
+- `ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest`
+
+### 2. Prerequisites (Local Development)
 - Docker Engine with Buildx support
 - Docker Sandbox CLI (`sbx`)
 - Python 3.9+ (for running validation test suites)
 
-### 2. Validate Kit Schemas
+### 3. Validate Kit Schemas
 
 These are Docker Sandbox Kit **v3 source kits**. `sbx kit validate` is a v1/v2 command and rejects them; validate with the BuildKit frontend instead. Use a `docker-container` builder so descriptor annotations survive export:
 ```bash
@@ -86,12 +111,12 @@ Inspect the resolved declarations without starting a sandbox. Keep the `SBX_KIT_
 SBX_KIT_BUILDER=sandbox sbx kit inspect ./kits/python-ml-mixin
 ```
 
-The same command on `./kits/agy-colab-kaggle-kit` will still fail until the four member images are pushed, because v3 sets must reference published OCI images. Until then, use the local `sbx run` composition in step 3. Its composition is also checked statically by the built-in conformance suite:
+The same command on `./kits/agy-colab-kaggle-kit` will still fail until the four member images are pushed, because v3 sets must reference published OCI images. Until then, use the local `sbx run` composition in step 4. Its composition is also checked statically by the built-in conformance suite:
 ```bash
 python3 tests/test_sbx_kits_e2e.py
 ```
 
-### 3. Run Locally (No Push Required)
+### 4. Run Locally (No Push Required)
 
 You can run sandboxes directly from local kit source directories using `sbx run`. Keep the `SBX_KIT_BUILDER=sandbox` prefix on every local run; the default `docker` driver fails with `OCI exporter is not supported for the docker driver`. Local Python/Colab/Kaggle mixins share `docker.io/sbx/shell-docker-image:latest` as their base so the in-sandbox Docker daemon and CLI shims survive composition. The optional Playwright mixin uses `docker.io/sbx/antigravity-image:latest` as its final base and stages Node, Chromium, and the browser runtime libraries under `/opt/playwright-mcp-mixin`.
 
@@ -122,23 +147,51 @@ Use `--kit-arg auth_method=gcp --kit-arg gcp_project=<project> --kit-arg gcp_loc
 SBX_KIT_BUILDER=sandbox sbx run ./kits/agy-colab-kaggle-kit .
 ```
 
-### 4. Build and Publish Kits to OCI Registry
+### 5. Build and Publish Kits to GitHub Container Registry (`ghcr.io`)
 
-Each kit uses `# syntax=docker/sandbox-kit:3`, enabling direct builds with BuildKit. Select the `kit-builder` created in step 2; the default `docker` driver can drop the descriptor annotations:
+Pushes to `main` and `v*` tags automatically validate and publish all kits to `ghcr.io/danielmcstr/sbx-kits/*` via [`.github/workflows/publish-kits.yml`](.github/workflows/publish-kits.yml) using `GITHUB_TOKEN`.
+
+To build and push manually from a local machine, authenticate to GHCR with a Personal Access Token that has `write:packages` and `read:packages` scopes, and select the `kit-builder` created in step 3 so descriptor annotations survive export:
 
 ```bash
-# Build kit images
-docker buildx build --builder kit-builder -f kits/antigravity-kit-v3/antigravity.yaml -t danielmcstr/sbx-kit-antigravity:latest --push .
-docker buildx build --builder kit-builder -f kits/python-ml-mixin/python-ml.yaml -t danielmcstr/sbx-kit-python-ml:latest --push .
-docker buildx build --builder kit-builder -f kits/colab-mixin/colab.yaml -t danielmcstr/sbx-kit-colab:latest --push .
-docker buildx build --builder kit-builder -f kits/kaggle-mixin/kaggle.yaml -t danielmcstr/sbx-kit-kaggle:latest --push .
-docker buildx build --builder kit-builder -f kits/playwright-mcp-mixin/playwright-mcp.yaml -t danielmcstr/sbx-kit-playwright-mcp:latest --push .
+echo "$GHCR_PAT" | docker login ghcr.io -u danielmcstr --password-stdin
 
-# Build and publish the master set
-docker buildx build --builder kit-builder -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml -t danielmcstr/sbx-kit-agy-colab-kaggle:latest --push .
+# Build and push leaf kit images (note each kit's own directory is the build context)
+docker buildx build --builder kit-builder --platform linux/amd64 \
+  -f kits/antigravity-kit-v3/antigravity.yaml \
+  --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
+  -t ghcr.io/danielmcstr/sbx-kits/antigravity:latest --push ./kits/antigravity-kit-v3
+
+docker buildx build --builder kit-builder --platform linux/amd64 \
+  -f kits/python-ml-mixin/python-ml.yaml \
+  --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
+  -t ghcr.io/danielmcstr/sbx-kits/python-ml:latest --push ./kits/python-ml-mixin
+
+docker buildx build --builder kit-builder --platform linux/amd64 \
+  -f kits/colab-mixin/colab.yaml \
+  --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
+  -t ghcr.io/danielmcstr/sbx-kits/colab:latest --push ./kits/colab-mixin
+
+docker buildx build --builder kit-builder --platform linux/amd64 \
+  -f kits/kaggle-mixin/kaggle.yaml \
+  --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
+  -t ghcr.io/danielmcstr/sbx-kits/kaggle:latest --push ./kits/kaggle-mixin
+
+docker buildx build --builder kit-builder --platform linux/amd64 \
+  -f kits/playwright-mcp-mixin/playwright-mcp.yaml \
+  --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
+  -t ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest --push ./kits/playwright-mcp-mixin
+
+# Build and publish the master set (after the 4 member images exist in ghcr.io)
+docker buildx build --builder kit-builder \
+  -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml \
+  --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
+  -t ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest --push ./kits/agy-colab-kaggle-kit
 ```
 
-### 5. In-Sandbox Verification
+> **Note:** On personal GitHub accounts, verify each newly created package under `https://github.com/danielmcstr?tab=packages` is set to **Public** (*Package settings → Danger Zone → Change visibility*) so anonymous `sbx run` pulls succeed without `docker login`.
+
+### 6. In-Sandbox Verification
 
 Once inside the interactive Antigravity sandbox session:
 
@@ -195,3 +248,9 @@ Once inside the interactive Antigravity sandbox session:
 - **Least-Privilege Egress**: Every mixin specifies strict host-level network allowlists in `com.docker.sandbox/network-policy@1`.
 - **Zero-Trust Proxied Credentials**: Secrets (`GEMINI_API_KEY`, `KAGGLE_API_TOKEN`, OAuth tokens) never enter the container in plaintext. The host sandbox proxy transparently intercepts API requests to designated hosts and injects the authorization headers.
 - **Rootless Execution**: Workloads and mixins run unprivileged under the `agent` user (`UID 1000`).
+
+---
+
+## License
+
+Licensed under the [MIT License](LICENSE).
