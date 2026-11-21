@@ -1,12 +1,10 @@
 # syntax=docker/dockerfile:1
-FROM debian:bookworm-slim
+FROM docker.io/sbx/shell-docker-image:latest
 
 USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
     python3-venv \
-    python3-pip \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,3 +23,5 @@ RUN python3 -m venv /opt/colab/venv \
 # Stage bundled skill for sandbox skill linking
 RUN mkdir -p /usr/share/colab-mixin/skills/colab-operator
 COPY skills/colab-operator/SKILL.md /usr/share/colab-mixin/skills/colab-operator/SKILL.md
+
+USER agent

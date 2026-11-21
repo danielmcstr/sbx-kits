@@ -1,0 +1,30 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: mixin
+displayName: Playwright MCP Plugin Mixin
+description: Optional plugin mixin registering a headless Playwright MCP server with Antigravity.
+version: "1.0.0"
+sourceUrl: https://github.com/microsoft/playwright-mcp
+licenses: [Apache-2.0]
+
+provides:
+  - playwright-mcp
+
+capabilities:
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/playwright-mcp-mixin/skills/browser-automation
+      name: browser-automation
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - "*"
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      install:
+        - command:
+            - /opt/playwright-mcp-mixin/runtime/bin/node
+            - /opt/playwright-mcp-mixin/install-mcp-config.js
+          user: agent
+          description: Register Playwright MCP server with Antigravity

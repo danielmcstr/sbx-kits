@@ -3,6 +3,7 @@ schemaVersion: "3"
 kind: mixin
 displayName: Kaggle Toolchain Mixin
 description: Mixin providing Kaggle CLI, official Kaggle agent skill, and proxy-managed credentials.
+version: "1.0.0"
 
 provides:
   - kaggle

@@ -2,7 +2,7 @@
 FROM ghcr.io/astral-sh/uv:latest AS uv-bin
 FROM ghcr.io/astral-sh/ruff:latest AS ruff-bin
 
-FROM debian:bookworm-slim
+FROM docker.io/sbx/shell-docker-image:latest
 
 USER root
 
@@ -28,3 +28,5 @@ RUN python3 -m venv /opt/python-ml/venv \
 # Stage bundled skill for Docker Sandboxes agent skill registration
 RUN mkdir -p /usr/share/python-ml-mixin/skills/notebook-uv-workflow
 COPY skills/notebook-uv-workflow/SKILL.md /usr/share/python-ml-mixin/skills/notebook-uv-workflow/SKILL.md
+
+USER agent

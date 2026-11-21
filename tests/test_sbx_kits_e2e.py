@@ -30,6 +30,7 @@ KNOWN_CAPABILITIES = {
     "com.docker.sandbox/agent-skills@1",
     "com.docker.sandbox/agent-skill@1",
     "com.docker.sandbox/agent-context@1",
+    "com.docker.sandbox/dockerd@1",
     "com.docker.sandbox/network-policy@1",
     "com.docker.sandbox/credential@1",
 }
@@ -87,6 +88,7 @@ def test_kit_descriptors():
         ("python-ml-mixin", "python-ml.yaml", "mixin"),
         ("colab-mixin", "colab.yaml", "mixin"),
         ("kaggle-mixin", "kaggle.yaml", "mixin"),
+        ("playwright-mcp-mixin", "playwright-mcp.yaml", "mixin"),
         ("agy-colab-kaggle-kit", "agy-colab-kaggle.yaml", "set"),
     ]
 
@@ -107,6 +109,11 @@ def test_kit_descriptors():
         assert f"kind: {expected_kind}" in content, \
             f"{yaml_filename} expected kind '{expected_kind}'"
 
+        parsed = parse_simple_yaml(content)
+        if expected_kind != "set":
+            assert "version" in parsed, \
+                f"{yaml_filename} missing top-level version required for versioned provides"
+
         print(f"  ✓ {kit_dir_name}/{yaml_filename} [kind: {expected_kind}, v3 syntax OK]")
 
 
@@ -117,6 +124,7 @@ def test_companion_dockerfiles():
         ("python-ml-mixin", "python-ml.dockerfile", "python-ml.yaml"),
         ("colab-mixin", "colab.dockerfile", "colab.yaml"),
         ("kaggle-mixin", "kaggle.dockerfile", "kaggle.yaml"),
+        ("playwright-mcp-mixin", "playwright-mcp.dockerfile", "playwright-mcp.yaml"),
     ]
 
     for kit_dir_name, dockerfile_name, yaml_name in dockerfile_kits:
@@ -128,6 +136,10 @@ def test_companion_dockerfiles():
         # Check syntax header
         assert "# syntax=docker/dockerfile:1" in df_content or "FROM " in df_content, \
             f"{dockerfile_name} missing FROM directive"
+
+        if kit_dir_name in {"python-ml-mixin", "colab-mixin", "kaggle-mixin"}:
+            assert "FROM docker.io/sbx/shell-docker-image:latest" in df_content, \
+                f"{dockerfile_name} must share the Docker-enabled sandbox base"
 
         # Check local COPY references exist
         for line in df_content.splitlines():
@@ -148,6 +160,7 @@ def test_skills_frontmatter():
         ("python-ml-mixin", "skills/notebook-uv-workflow/SKILL.md", "notebook-uv-workflow"),
         ("colab-mixin", "skills/colab-operator/SKILL.md", "colab-operator"),
         ("kaggle-mixin", "skills/kaggle-cli/SKILL.md", "kaggle-cli"),
+        ("playwright-mcp-mixin", "skills/browser-automation/SKILL.md", "browser-automation"),
     ]
 
     for kit_dir_name, rel_path, expected_skill_name in skills:
@@ -199,6 +212,14 @@ def test_zero_trust_proxy_policies():
 
         print(f"  ✓ {kit_dir_name} zero-trust domain injection bound: {expected_injected_domain}")
 
+    antigravity_content = (KITS_DIR / "antigravity-kit-v3" / "antigravity.yaml").read_text(encoding="utf-8")
+    assert "com.docker.sandbox/dockerd@1" in antigravity_content, "Private Docker Engine capability is missing"
+    assert "usermod -aG docker agent" in antigravity_content, "Docker group membership hook is missing"
+    assert "service: antigravity" in antigravity_content, "Antigravity OAuth service binding is missing"
+    assert "agy-oauth-access-proxy-managed" in antigravity_content, "Antigravity OAuth sentinels are missing"
+    assert "credentialFile:" in antigravity_content, "Antigravity OAuth credential file is missing"
+    print("  ✓ antigravity-kit-v3 proxy-managed OAuth binding configured")
+
 
 def test_e2e_composition():
     print(f"\n{YELLOW}[5/5] Testing E2E Master Kit Set Composition...{RESET}")
@@ -210,6 +231,7 @@ def test_e2e_composition():
     # Parse refs
     refs = re.findall(r"-\s+ref:\s+([^\s]+)", set_content)
     assert len(refs) == 4, f"Expected 4 kit refs in master set, found {len(refs)}"
+    assert not any("playwright" in ref for ref in refs), "Playwright MCP mixin must stay ad hoc, not in the master set"
 
     # Map published kit references to local workspace directories
     ref_map = {

@@ -3,6 +3,7 @@ schemaVersion: "3"
 kind: mixin
 displayName: Google Colab Mixin
 description: Mixin providing Google Colab CLI, headless keyring configuration, and colab-operator skill.
+version: "1.0.0"
 
 provides:
   - colab
@@ -22,6 +23,7 @@ capabilities:
           - pypi.org
           - files.pythonhosted.org
   - type: com.docker.sandbox/credential@1
+    optional: true
     description: Google Colab OAuth credential exchange
     config:
       service: google-colab
@@ -32,3 +34,6 @@ capabilities:
           path: /token
         resourceHosts:
           - colab.research.google.com
+        sentinels:
+          accessToken: colab-at-proxy-managed
+          refreshToken: colab-rt-proxy-managed

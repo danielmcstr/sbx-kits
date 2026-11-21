@@ -2,7 +2,20 @@
 schemaVersion: "3"
 kind: workload
 displayName: Antigravity Agent Workload (v3)
-description: Antigravity autonomous agent workload with skills discovery, git identity, and Gemini credentials.
+description: Antigravity autonomous agent workload with skills discovery, git identity, Gemini API key, and Google OAuth credentials.
+version: "1.0.0"
+
+args:
+  auth_method:
+    default: consumer
+    enum: [consumer, gcp]
+    description: Antigravity login mode; use gcp for Google Cloud / Gemini Enterprise
+  gcp_project:
+    default: ""
+    description: Google Cloud project ID; required for reusing a gcp login
+  gcp_location:
+    default: global
+    description: Google Cloud location used with gcp authentication
 
 provides:
   - antigravity
@@ -21,15 +34,33 @@ capabilities:
         You are operating inside an isolated Docker Sandbox environment.
         Workspace directory is /home/agent/workspace.
         Skills are dynamically linked into /home/agent/.gemini/config/skills.
+  - type: com.docker.sandbox/dockerd@1
+    optional: true
   - type: com.docker.sandbox/network-policy@1
     config:
       runtime:
         allow:
-          - generativelanguage.googleapis.com
+          - antigravity.google:443
+          - antigravity-unleash.goog:443
+          - antigravity-cli-auto-updater-974169037036.us-central1.run.app:443
+          - storage.googleapis.com:443
+          - accounts.google.com:443
+          - lh3.googleusercontent.com:443
+          - oauth2.googleapis.com:443
+          - play.googleapis.com:443
+          - www.googleapis.com:443
+          - businessaicode.googleapis.com:443
+          - aiplatform.googleapis.com:443
+          - aicode.googleapis.com:443
+          - cloudaicompanion.googleapis.com:443
+          - cloudcode-pa.googleapis.com:443
+          - daily-cloudcode-pa.googleapis.com:443
+          - generativelanguage.googleapis.com:443
           - api.anthropic.com
           - api.github.com
           - github.com
   - type: com.docker.sandbox/credential@1
+    optional: true
     description: Gemini API key for Antigravity agent
     config:
       service: gemini
@@ -41,3 +72,78 @@ capabilities:
           - domain: generativelanguage.googleapis.com
             header: x-goog-api-key
             format: "%s"
+  - type: com.docker.sandbox/credential@1
+    optional: true
+    description: Google OAuth session used by Antigravity CLI
+    config:
+      service: antigravity
+      phase: runtime
+      oauth:
+        tokenEndpoint:
+          host: oauth2.googleapis.com
+          path: /token
+        resourceHosts:
+          - businessaicode.googleapis.com
+          - aiplatform.googleapis.com
+          - play.googleapis.com
+          - aicode.googleapis.com
+          - cloudaicompanion.googleapis.com
+          - cloudcode-pa.googleapis.com
+          - daily-cloudcode-pa.googleapis.com
+          - generativelanguage.googleapis.com
+          - www.googleapis.com
+        sentinels:
+          accessToken: agy-oauth-access-proxy-managed
+          refreshToken: agy-oauth-refresh-proxy-managed
+        credentialFile:
+          path: ~/.gemini/antigravity-cli/antigravity-oauth-token
+          structure:
+            token:
+              access_token: "{{.AccessToken}}"
+              token_type: Bearer
+              refresh_token: "{{.RefreshToken}}"
+              expiry: "9999-12-31T23:59:59Z"
+            auth_method: "${{ kit.args.auth_method }}"
+            project_id: "${{ kit.args.gcp_project }}"
+            region: "${{ kit.args.gcp_location }}"
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      install:
+        - command: |
+            set -eu
+            if getent group docker >/dev/null; then
+              usermod -aG docker agent
+            fi
+          user: "0"
+          description: Allow sandbox agent to use the private Docker Engine
+        - command: |
+            set -eu
+            settings_dir="$HOME/.gemini/antigravity-cli"
+            settings="$settings_dir/settings.json"
+            [ ! -e "$settings" ] || exit 0
+            mkdir -p "$settings_dir"
+            ws="${WORKSPACE_DIR:-/workspace}"
+            esc=$(printf '%s' "$ws" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g')
+            printf '%s\n' "{
+              \"agentMode\": \"accept-edits\",
+              \"artifactReviewMode\": \"always-proceed\",
+              \"fileAccessPolicy\": \"allow\",
+              \"internetAccessPolicy\": \"allow\",
+              \"nonWorkspaceFileAccess\": \"allow\",
+              \"permissions\": {
+                \"allow\": [
+                  \"command(*)\",
+                  \"execute_url(*)\",
+                  \"mcp(*)\",
+                  \"read_file(*)\",
+                  \"read_url(*)\",
+                  \"write_file(*)\"
+                ]
+              },
+              \"toolExecutionPolicy\": \"always-proceed\",
+              \"trustedWorkspaces\": [\"$esc\"]
+            }" > "$settings"
+            chmod 0600 "$settings"
+          user: agent
+          env: [WORKSPACE_DIR]
+          description: Seed permissive Antigravity settings for sandboxed operation

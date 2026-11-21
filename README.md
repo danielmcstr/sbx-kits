@@ -28,6 +28,11 @@ sbx-kits/
 │   │   ├── kaggle.yaml            # Mixin Descriptor (proxy-managed token)
 │   │   ├── kaggle.dockerfile      # Kaggle CLI installer & staged skills
 │   │   └── skills/                # Agent Skill: kaggle-cli + references
+│   ├── playwright-mcp-mixin/      # Optional Plugin Mixin (kind: mixin)
+│   │   ├── playwright-mcp.yaml    # Mixin Descriptor (MCP config + browser egress)
+│   │   ├── playwright-mcp.dockerfile # Node 20, Playwright MCP, headless Chromium
+│   │   ├── install-mcp-config.js  # Idempotent ~/.gemini/config/mcp_config.json merge
+│   │   └── skills/                # Agent Skill: browser-automation
 │   └── agy-colab-kaggle-kit/      # Master Set (kind: set)
 │       └── agy-colab-kaggle.yaml  # Unified composition descriptor
 ├── tests/
@@ -42,11 +47,12 @@ sbx-kits/
 
 | Kit | Kind | Provided Tools | Injected Skills | Network & Credential Grants |
 | :--- | :--- | :--- | :--- | :--- |
-| **`antigravity-kit-v3`** | `workload` | `antigravity`, `agy` | Skill mount point: `~/.gemini/config/skills` | `generativelanguage.googleapis.com`<br>`api.github.com`<br>`GEMINI_API_KEY` proxy injection |
+| **`antigravity-kit-v3`** | `workload` | `antigravity`, `agy` | Skill mount point: `~/.gemini/config/skills` | `generativelanguage.googleapis.com`<br>`api.github.com`<br>`GEMINI_API_KEY` proxy injection<br>Google OAuth proxy session |
 | **`python-ml-mixin`** | `mixin` | `uv`, `ruff`, `jupytext`, `nbstripout` | `notebook-uv-workflow` | `pypi.org`, `files.pythonhosted.org` |
 | **`colab-mixin`** | `mixin` | `colab` | `colab-operator` | `colab.research.google.com`, `oauth2.googleapis.com`<br>Headless `PlaintextKeyring` |
 | **`kaggle-mixin`** | `mixin` | `kaggle` | `kaggle-cli` | `api.kaggle.com`, `storage.googleapis.com`<br>`KAGGLE_API_TOKEN` proxy injection |
-| **`agy-colab-kaggle-kit`** | `set` | *All 8 tools combined* | *All 3 skills combined* | Complete merged policy |
+| **`playwright-mcp-mixin`** | `mixin` | `playwright-mcp` | `browser-automation` | `*` (browser egress)<br>Local stdio MCP server, no credentials |
+| **`agy-colab-kaggle-kit`** | `set` | *All 8 tools combined* | *All 3 skills combined* | Complete merged policy; excludes Playwright MCP |
 
 ---
 
@@ -59,51 +65,77 @@ sbx-kits/
 
 ### 2. Validate Kit Schemas
 
-Validate individual kit descriptors using `sbx`:
+These are Docker Sandbox Kit **v3 source kits**. `sbx kit validate` is a v1/v2 command and rejects them; validate with the BuildKit frontend instead. Use a `docker-container` builder so descriptor annotations survive export:
 ```bash
-# Validate each kit descriptor
-sbx kit validate ./kits/antigravity-kit-v3
-sbx kit validate ./kits/python-ml-mixin
-sbx kit validate ./kits/colab-mixin
-sbx kit validate ./kits/kaggle-mixin
+docker buildx inspect kit-builder >/dev/null 2>&1 || \
+  docker buildx create --name kit-builder --driver docker-container --bootstrap
+
+for entry in \
+  antigravity-kit-v3:antigravity.yaml \
+  python-ml-mixin:python-ml.yaml \
+  colab-mixin:colab.yaml \
+  kaggle-mixin:kaggle.yaml \
+  playwright-mcp-mixin:playwright-mcp.yaml; do
+  dir=${entry%%:*}; file=${entry#*:}
+  (cd "kits/$dir" && docker buildx build --builder kit-builder . -f "$file" --output type=cacheonly)
+done
 ```
 
-Alternatively, run the built-in end-to-end conformance test suite:
+Inspect the resolved declarations without starting a sandbox. Keep the `SBX_KIT_BUILDER=sandbox` prefix; without it `sbx` uses the default `docker` driver, which cannot export the OCI layout this error reports:
+```bash
+SBX_KIT_BUILDER=sandbox sbx kit inspect ./kits/python-ml-mixin
+```
+
+The same command on `./kits/agy-colab-kaggle-kit` will still fail until the four member images are pushed, because v3 sets must reference published OCI images. Until then, use the local `sbx run` composition in step 3. Its composition is also checked statically by the built-in conformance suite:
 ```bash
 python3 tests/test_sbx_kits_e2e.py
 ```
 
 ### 3. Run Locally (No Push Required)
 
-You can run sandboxes directly from local kit source directories using `sbx run`:
+You can run sandboxes directly from local kit source directories using `sbx run`. Keep the `SBX_KIT_BUILDER=sandbox` prefix on every local run; the default `docker` driver fails with `OCI exporter is not supported for the docker driver`. Local Python/Colab/Kaggle mixins share `docker.io/sbx/shell-docker-image:latest` as their base so the in-sandbox Docker daemon and CLI shims survive composition. The optional Playwright mixin uses `docker.io/sbx/antigravity-image:latest` as its final base and stages Node, Chromium, and the browser runtime libraries under `/opt/playwright-mcp-mixin`.
 
 #### Run with Individual Mixins:
 ```bash
-sbx run ./kits/antigravity-kit-v3 \
+SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity-kit-v3 \
   --kit ./kits/python-ml-mixin \
   --kit ./kits/colab-mixin \
   --kit ./kits/kaggle-mixin \
+  --kit-arg auth_method=consumer \
   .
 ```
 
+#### Add Optional Plugin Mixins Ad Hoc:
+
+Plugin mixins are not part of the master set. Add only the ones a session needs:
+```bash
+SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity-kit-v3 \
+  --kit ./kits/playwright-mcp-mixin \
+  --kit-arg auth_method=consumer \
+  .
+```
+
+Use `--kit-arg auth_method=gcp --kit-arg gcp_project=<project> --kit-arg gcp_location=<location>` for Google Cloud / Gemini Enterprise OAuth sessions. An Antigravity session can use the proxy-managed Google OAuth binding, the `GEMINI_API_KEY` binding, or both.
+
 #### Run the Master Composed Set:
 ```bash
-sbx run ./kits/agy-colab-kaggle-kit .
+SBX_KIT_BUILDER=sandbox sbx run ./kits/agy-colab-kaggle-kit .
 ```
 
 ### 4. Build and Publish Kits to OCI Registry
 
-Each kit uses `# syntax=docker/sandbox-kit:3`, enabling direct builds with BuildKit:
+Each kit uses `# syntax=docker/sandbox-kit:3`, enabling direct builds with BuildKit. Select the `kit-builder` created in step 2; the default `docker` driver can drop the descriptor annotations:
 
 ```bash
 # Build kit images
-docker buildx build -f kits/antigravity-kit-v3/antigravity.yaml -t danielmcstr/sbx-kit-antigravity:latest --push .
-docker buildx build -f kits/python-ml-mixin/python-ml.yaml -t danielmcstr/sbx-kit-python-ml:latest --push .
-docker buildx build -f kits/colab-mixin/colab.yaml -t danielmcstr/sbx-kit-colab:latest --push .
-docker buildx build -f kits/kaggle-mixin/kaggle.yaml -t danielmcstr/sbx-kit-kaggle:latest --push .
+docker buildx build --builder kit-builder -f kits/antigravity-kit-v3/antigravity.yaml -t danielmcstr/sbx-kit-antigravity:latest --push .
+docker buildx build --builder kit-builder -f kits/python-ml-mixin/python-ml.yaml -t danielmcstr/sbx-kit-python-ml:latest --push .
+docker buildx build --builder kit-builder -f kits/colab-mixin/colab.yaml -t danielmcstr/sbx-kit-colab:latest --push .
+docker buildx build --builder kit-builder -f kits/kaggle-mixin/kaggle.yaml -t danielmcstr/sbx-kit-kaggle:latest --push .
+docker buildx build --builder kit-builder -f kits/playwright-mcp-mixin/playwright-mcp.yaml -t danielmcstr/sbx-kit-playwright-mcp:latest --push .
 
 # Build and publish the master set
-docker buildx build -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml -t danielmcstr/sbx-kit-agy-colab-kaggle:latest --push .
+docker buildx build --builder kit-builder -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml -t danielmcstr/sbx-kit-agy-colab-kaggle:latest --push .
 ```
 
 ### 5. In-Sandbox Verification
@@ -116,11 +148,13 @@ Once inside the interactive Antigravity sandbox session:
    ls -la /home/agent/.gemini/config/skills
    ```
    You will see:
-   - `notebook-uv-workflow`
-   - `colab-operator`
-   - `kaggle-cli`
+    - `notebook-uv-workflow`
+    - `colab-operator`
+    - `kaggle-cli`
+    - `browser-automation` when `playwright-mcp-mixin` was selected
 
 2. **Verify Toolchains**:
+
    ```bash
    uv --version
    ruff --version
@@ -136,13 +170,25 @@ Once inside the interactive Antigravity sandbox session:
      colab sessions
      ```
      *Executes using headless keyring without prompting for GUI authentication.*
-   - Kaggle CLI:
-     ```bash
-     kaggle datasets list
-     ```
-     *Executes securely using the proxy-injected `KAGGLE_API_TOKEN`.*
+    - Kaggle CLI:
+      ```bash
+      kaggle datasets list
+      ```
+      *Executes securely using the proxy-injected `KAGGLE_API_TOKEN`.*
+    - Antigravity OAuth:
+      ```bash
+      cat ~/.gemini/antigravity-cli/antigravity-oauth-token
+      ```
+      *Shows proxy sentinel tokens only; the real tokens stay host-side.*
+
+4. **Verify Optional Playwright MCP** (when selected):
+   ```bash
+   cat ~/.gemini/config/mcp_config.json
+   ```
+   The `playwright` stdio entry launches headless Chromium through the bundled Node runtime.
 
 ---
+
 
 ## Security Model
 

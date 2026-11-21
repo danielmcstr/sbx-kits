@@ -3,6 +3,7 @@ schemaVersion: "3"
 kind: mixin
 displayName: Python ML Toolchain Mixin
 description: Modular mixin supplying uv, ruff, jupytext, nbstripout, and notebook workflow skill.
+version: "1.0.0"
 
 provides:
   - uv
