@@ -60,7 +60,9 @@ sbx-kits/
 
 ### 1. Quickstart (Published Images on GHCR)
 
-Run directly from the public GitHub Container Registry images without cloning this repository:
+Run directly from the public GitHub Container Registry images without cloning this repository.
+
+#### Option A: Precomposed Master Set
 
 ```bash
 # Run the master composed set (Antigravity + Python ML + Colab + Kaggle)
@@ -75,13 +77,29 @@ sbx run ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest \
   .
 ```
 
+#### Option B: Compose from Published Mixin Building Blocks
+
+Use the published Antigravity workload image as the base and add each published mixin with its own `--kit` flag. This composes the same core tools as the master set at run time, without the `agy-colab-kaggle` set image. The optional Playwright MCP mixin is included below; it is not part of the master set.
+
+```bash
+sbx run ghcr.io/danielmcstr/sbx-kits/antigravity:latest \
+  --kit ghcr.io/danielmcstr/sbx-kits/python-ml:latest \
+  --kit ghcr.io/danielmcstr/sbx-kits/colab:latest \
+  --kit ghcr.io/danielmcstr/sbx-kits/kaggle:latest \
+  --kit ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest \
+  --kit-arg auth_method=consumer \
+  .
+```
+
+Remove the `playwright-mcp` `--kit` line for the core three mixins only; any other mixin can be omitted the same way. Use `--kit-arg auth_method=gcp --kit-arg gcp_project=<project> --kit-arg gcp_location=<location>` for Google Cloud / Gemini Enterprise OAuth sessions. See [In-Sandbox Verification](#6-in-sandbox-verification) for the skills and tools each mixin provides.
+
 Published packages:
-- `ghcr.io/danielmcstr/sbx-kits/antigravity:latest`
-- `ghcr.io/danielmcstr/sbx-kits/python-ml:latest`
-- `ghcr.io/danielmcstr/sbx-kits/colab:latest`
-- `ghcr.io/danielmcstr/sbx-kits/kaggle:latest`
-- `ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest`
-- `ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest`
+- `ghcr.io/danielmcstr/sbx-kits/antigravity:latest` — workload base
+- `ghcr.io/danielmcstr/sbx-kits/python-ml:latest` — mixin
+- `ghcr.io/danielmcstr/sbx-kits/colab:latest` — mixin
+- `ghcr.io/danielmcstr/sbx-kits/kaggle:latest` — mixin
+- `ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest` — mixin
+- `ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest` — precomposed set (Option A)
 
 ### 2. Prerequisites (Local Development)
 - Docker Engine with Buildx support
