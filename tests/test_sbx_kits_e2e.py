@@ -86,14 +86,14 @@ def parse_simple_yaml(text: str) -> dict:
 
 
 def test_kit_descriptors():
-    print(f"\n{YELLOW}[1/5] Validating Kit Descriptors & Schemas...{RESET}")
+    print(f"\n{YELLOW}[1/6] Validating Kit Descriptors & Schemas...{RESET}")
     expected_kits = [
-        ("antigravity-kit-v3", "antigravity.yaml", "workload"),
-        ("python-ml-mixin", "python-ml.yaml", "mixin"),
-        ("colab-mixin", "colab.yaml", "mixin"),
-        ("kaggle-mixin", "kaggle.yaml", "mixin"),
-        ("playwright-mcp-mixin", "playwright-mcp.yaml", "mixin"),
-        ("agy-colab-kaggle-kit", "agy-colab-kaggle.yaml", "set"),
+        ("antigravity", "antigravity.yaml", "workload"),
+        ("python-ml", "python-ml.yaml", "mixin"),
+        ("colab", "colab.yaml", "mixin"),
+        ("kaggle", "kaggle.yaml", "mixin"),
+        ("playwright-mcp", "playwright-mcp.yaml", "mixin"),
+        ("agy-colab-kaggle", "agy-colab-kaggle.yaml", "set"),
     ]
 
     for kit_dir_name, yaml_filename, expected_kind in expected_kits:
@@ -122,13 +122,13 @@ def test_kit_descriptors():
 
 
 def test_companion_dockerfiles():
-    print(f"\n{YELLOW}[2/5] Validating Companion Dockerfiles & Stage References...{RESET}")
+    print(f"\n{YELLOW}[2/6] Validating Companion Dockerfiles & Stage References...{RESET}")
     dockerfile_kits = [
-        ("antigravity-kit-v3", "antigravity.dockerfile", "antigravity.yaml"),
-        ("python-ml-mixin", "python-ml.dockerfile", "python-ml.yaml"),
-        ("colab-mixin", "colab.dockerfile", "colab.yaml"),
-        ("kaggle-mixin", "kaggle.dockerfile", "kaggle.yaml"),
-        ("playwright-mcp-mixin", "playwright-mcp.dockerfile", "playwright-mcp.yaml"),
+        ("antigravity", "antigravity.dockerfile", "antigravity.yaml"),
+        ("python-ml", "python-ml.dockerfile", "python-ml.yaml"),
+        ("colab", "colab.dockerfile", "colab.yaml"),
+        ("kaggle", "kaggle.dockerfile", "kaggle.yaml"),
+        ("playwright-mcp", "playwright-mcp.dockerfile", "playwright-mcp.yaml"),
     ]
 
     for kit_dir_name, dockerfile_name, yaml_name in dockerfile_kits:
@@ -141,7 +141,7 @@ def test_companion_dockerfiles():
         assert "# syntax=docker/dockerfile:1" in df_content or "FROM " in df_content, \
             f"{dockerfile_name} missing FROM directive"
 
-        if kit_dir_name in {"python-ml-mixin", "colab-mixin", "kaggle-mixin"}:
+        if kit_dir_name in {"python-ml", "colab", "kaggle"}:
             assert "FROM docker.io/sbx/shell-docker-image:latest" in df_content, \
                 f"{dockerfile_name} must share the Docker-enabled sandbox base"
 
@@ -159,12 +159,12 @@ def test_companion_dockerfiles():
 
 
 def test_skills_frontmatter():
-    print(f"\n{YELLOW}[3/5] Validating Agent Skills Specification & Frontmatter...{RESET}")
+    print(f"\n{YELLOW}[3/6] Validating Agent Skills Specification & Frontmatter...{RESET}")
     skills = [
-        ("python-ml-mixin", "skills/notebook-uv-workflow/SKILL.md", "notebook-uv-workflow"),
-        ("colab-mixin", "skills/colab-operator/SKILL.md", "colab-operator"),
-        ("kaggle-mixin", "skills/kaggle-cli/SKILL.md", "kaggle-cli"),
-        ("playwright-mcp-mixin", "skills/browser-automation/SKILL.md", "browser-automation"),
+        ("python-ml", "skills/notebook-uv-workflow/SKILL.md", "notebook-uv-workflow"),
+        ("colab", "skills/colab-operator/SKILL.md", "colab-operator"),
+        ("kaggle", "skills/kaggle-cli/SKILL.md", "kaggle-cli"),
+        ("playwright-mcp", "skills/browser-automation/SKILL.md", "browser-automation"),
     ]
 
     for kit_dir_name, rel_path, expected_skill_name in skills:
@@ -186,19 +186,19 @@ def test_skills_frontmatter():
         print(f"  ✓ {kit_dir_name} -> {expected_skill_name} [Frontmatter & instructions valid]")
 
     # Check references for kaggle
-    kaggle_refs = KITS_DIR / "kaggle-mixin" / "skills" / "kaggle-cli" / "references"
+    kaggle_refs = KITS_DIR / "kaggle" / "skills" / "kaggle-cli" / "references"
     for ref_name in ["competitions.md", "datasets.md", "kernels.md"]:
         assert (kaggle_refs / ref_name).is_file(), f"Missing kaggle reference doc: {ref_name}"
     print(f"  ✓ kaggle-cli reference documents verified (competitions, datasets, kernels)")
 
 
 def test_zero_trust_proxy_policies():
-    print(f"\n{YELLOW}[4/5] Validating Zero-Trust Proxy & Credential Policies...{RESET}")
+    print(f"\n{YELLOW}[4/6] Validating Zero-Trust Proxy & Credential Policies...{RESET}")
     # Inspect credentials and network allowlists
     policy_checks = [
-        ("antigravity-kit-v3", "antigravity.yaml", "generativelanguage.googleapis.com"),
-        ("colab-mixin", "colab.yaml", "colab.research.google.com"),
-        ("kaggle-mixin", "kaggle.yaml", "api.kaggle.com"),
+        ("antigravity", "antigravity.yaml", "generativelanguage.googleapis.com"),
+        ("colab", "colab.yaml", "colab.research.google.com"),
+        ("kaggle", "kaggle.yaml", "api.kaggle.com"),
     ]
 
     for kit_dir_name, yaml_name, expected_injected_domain in policy_checks:
@@ -216,18 +216,18 @@ def test_zero_trust_proxy_policies():
 
         print(f"  ✓ {kit_dir_name} zero-trust domain injection bound: {expected_injected_domain}")
 
-    antigravity_content = (KITS_DIR / "antigravity-kit-v3" / "antigravity.yaml").read_text(encoding="utf-8")
+    antigravity_content = (KITS_DIR / "antigravity" / "antigravity.yaml").read_text(encoding="utf-8")
     assert "com.docker.sandbox/dockerd@1" in antigravity_content, "Private Docker Engine capability is missing"
     assert "usermod -aG docker agent" in antigravity_content, "Docker group membership hook is missing"
     assert "service: antigravity" in antigravity_content, "Antigravity OAuth service binding is missing"
     assert "agy-oauth-access-proxy-managed" in antigravity_content, "Antigravity OAuth sentinels are missing"
     assert "credentialFile:" in antigravity_content, "Antigravity OAuth credential file is missing"
-    print("  ✓ antigravity-kit-v3 proxy-managed OAuth binding configured")
+    print("  ✓ antigravity proxy-managed OAuth binding configured")
 
 
 def test_e2e_composition():
-    print(f"\n{YELLOW}[5/5] Testing E2E Master Kit Set Composition...{RESET}")
-    set_yaml_path = KITS_DIR / "agy-colab-kaggle-kit" / "agy-colab-kaggle.yaml"
+    print(f"\n{YELLOW}[5/6] Testing E2E Master Kit Set Composition...{RESET}")
+    set_yaml_path = KITS_DIR / "agy-colab-kaggle" / "agy-colab-kaggle.yaml"
     set_content = set_yaml_path.read_text(encoding="utf-8")
     
     assert "kind: set" in set_content
@@ -239,10 +239,10 @@ def test_e2e_composition():
 
     # Map published kit references to local workspace directories
     ref_map = {
-        "ghcr.io/danielmcstr/sbx-kits/antigravity:latest": KITS_DIR / "antigravity-kit-v3",
-        "ghcr.io/danielmcstr/sbx-kits/python-ml:latest": KITS_DIR / "python-ml-mixin",
-        "ghcr.io/danielmcstr/sbx-kits/colab:latest": KITS_DIR / "colab-mixin",
-        "ghcr.io/danielmcstr/sbx-kits/kaggle:latest": KITS_DIR / "kaggle-mixin",
+        "ghcr.io/danielmcstr/sbx-kits/antigravity:latest": KITS_DIR / "antigravity",
+        "ghcr.io/danielmcstr/sbx-kits/python-ml:latest": KITS_DIR / "python-ml",
+        "ghcr.io/danielmcstr/sbx-kits/colab:latest": KITS_DIR / "colab",
+        "ghcr.io/danielmcstr/sbx-kits/kaggle:latest": KITS_DIR / "kaggle",
     }
 
     resolved_kinds = {"workload": [], "mixin": []}
@@ -283,7 +283,7 @@ def test_e2e_composition():
     # 1. Exactly 1 workload allowed
     assert len(resolved_kinds["workload"]) == 1, \
         f"Set must resolve exactly 1 workload, resolved: {resolved_kinds['workload']}"
-    assert resolved_kinds["workload"][0] == "antigravity-kit-v3"
+    assert resolved_kinds["workload"][0] == "antigravity"
 
     # 2. 3 mixins
     assert len(resolved_kinds["mixin"]) == 3, \
@@ -365,7 +365,7 @@ def _create_conv_db(db_path: Path, cid: str, message: str) -> sqlite3.Connection
 
 
 def _run_sync(args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess:
-    script = KITS_DIR / "antigravity-kit-v3" / "agy_session_sync.py"
+    script = KITS_DIR / "antigravity" / "agy_session_sync.py"
     return subprocess.run(
         [sys.executable, str(script), *args],
         env=env,
@@ -377,11 +377,11 @@ def _run_sync(args: list[str], env: dict[str, str]) -> subprocess.CompletedProce
 
 def test_session_persistence():
     print(f"\n{YELLOW}[6/6] Testing Workspace Session Persistence & Multi-Sandbox Merge...{RESET}")
-    agy_yaml = (KITS_DIR / "antigravity-kit-v3" / "antigravity.yaml").read_text(encoding="utf-8")
+    agy_yaml = (KITS_DIR / "antigravity" / "antigravity.yaml").read_text(encoding="utf-8")
     for required in ("persist_sessions:", "session_dir:", "auto_resume:", "persistence.json"):
         assert required in agy_yaml, f"antigravity.yaml missing session persistence setting: {required}"
 
-    entrypoint = KITS_DIR / "antigravity-kit-v3" / "agy-entrypoint.sh"
+    entrypoint = KITS_DIR / "antigravity" / "agy-entrypoint.sh"
     bash_check = subprocess.run(["bash", "-n", str(entrypoint)], capture_output=True, text=True)
     assert bash_check.returncode == 0, f"agy-entrypoint.sh syntax error: {bash_check.stderr}"
 

@@ -1,6 +1,6 @@
 # Modular Docker Sandbox Kits (`sbx-kits`)
 
-A modular, production-ready repository of Docker Sandbox Kit v3 packages. It provides an Antigravity agent workload (`antigravity-kit-v3`), three independent toolchain and skill mixins (`python-ml-mixin`, `colab-mixin`, `kaggle-mixin`), and a master kit set (`agy-colab-kaggle-kit`).
+A modular, production-ready repository of Docker Sandbox Kit v3 packages. It provides an Antigravity agent workload (`antigravity`), three independent toolchain and skill mixins (`python-ml`, `colab`, `kaggle`), an optional browser MCP mixin (`playwright-mcp`), and a master kit set (`agy-colab-kaggle`).
 
 Built with zero-trust proxy credential injection, headless keyring management, and automated agent skill linking.
 
@@ -11,34 +11,35 @@ Built with zero-trust proxy credential injection, headless keyring management, a
 ```
 sbx-kits/
 ├── kits/
-│   ├── antigravity-kit-v3/       # Base Agent Workload (kind: workload)
-│   │   ├── antigravity.yaml       # v3 Workload Descriptor (skills, git-identity, Gemini proxy)
-│   │   ├── antigravity.dockerfile # Runtime container recipe
-│   │   └── antigravity-context.md # Agent operating instructions
-│   ├── python-ml-mixin/          # Python Toolchain Mixin (kind: mixin)
-│   │   ├── python-ml.yaml         # Mixin Descriptor (uv, ruff, jupytext, nbstripout)
-│   │   ├── python-ml.dockerfile   # Multi-stage binary install & venv recipe
-│   │   └── skills/                # Agent Skill: notebook-uv-workflow
-│   ├── colab-mixin/              # Google Colab Mixin (kind: mixin)
-│   │   ├── colab.yaml             # Mixin Descriptor (OAuth proxy, Colab APIs)
-│   │   ├── colab.dockerfile       # Colab CLI & keyring installer
-│   │   ├── keyringrc.cfg          # PlaintextKeyring backend configuration
-│   │   └── skills/                # Agent Skill: colab-operator
-│   ├── kaggle-mixin/             # Kaggle Mixin (kind: mixin)
-│   │   ├── kaggle.yaml            # Mixin Descriptor (proxy-managed token)
-│   │   ├── kaggle.dockerfile      # Kaggle CLI installer & staged skills
-│   │   └── skills/                # Agent Skill: kaggle-cli + references
-│   ├── playwright-mcp-mixin/      # Optional Plugin Mixin (kind: mixin)
-│   │   ├── playwright-mcp.yaml    # Mixin Descriptor (MCP config + browser egress)
+│   ├── antigravity/              # Base Agent Workload (kind: workload)
+│   │   ├── antigravity.yaml      # v3 Workload Descriptor (skills, git-identity, Gemini proxy)
+│   │   ├── antigravity.dockerfile# Runtime container recipe
+│   │   ├── agy_session_sync.py   # Workspace session persistence manager
+│   │   ├── agy-entrypoint.sh     # TTY-safe entrypoint wrapper
+│   │   └── antigravity-context.md# Agent operating instructions
+│   ├── python-ml/                # Python Toolchain Mixin (kind: mixin)
+│   │   ├── python-ml.yaml        # Mixin Descriptor (uv, ruff, jupytext, nbstripout)
+│   │   ├── python-ml.dockerfile  # Multi-stage binary install & venv recipe
+│   │   └── skills/               # Agent Skill: notebook-uv-workflow
+│   ├── colab/                    # Google Colab Mixin (kind: mixin)
+│   │   ├── colab.yaml            # Mixin Descriptor (OAuth proxy, Colab APIs)
+│   │   ├── colab.dockerfile      # Colab CLI & keyring installer
+│   │   ├── keyringrc.cfg         # PlaintextKeyring backend configuration
+│   │   └── skills/               # Agent Skill: colab-operator
+│   ├── kaggle/                   # Kaggle Mixin (kind: mixin)
+│   │   ├── kaggle.yaml           # Mixin Descriptor (proxy-managed token)
+│   │   ├── kaggle.dockerfile     # Kaggle CLI installer & staged skills
+│   │   └── skills/               # Agent Skill: kaggle-cli + references
+│   ├── playwright-mcp/           # Optional Plugin Mixin (kind: mixin)
+│   │   ├── playwright-mcp.yaml   # Mixin Descriptor (MCP config + browser egress)
 │   │   ├── playwright-mcp.dockerfile # Node 20, Playwright MCP, headless Chromium
-│   │   ├── install-mcp-config.js  # Idempotent ~/.gemini/config/mcp_config.json merge
-│   │   └── skills/                # Agent Skill: browser-automation
-│   └── agy-colab-kaggle-kit/      # Master Set (kind: set)
-│       └── agy-colab-kaggle.yaml  # Unified composition descriptor
+│   │   ├── install-mcp-config.js # Idempotent ~/.gemini/config/mcp_config.json merge
+│   │   └── skills/               # Agent Skill: browser-automation
+│   └── agy-colab-kaggle/         # Master Set (kind: set)
+│       └── agy-colab-kaggle.yaml # Unified composition descriptor
 ├── tests/
-│   └── test_sbx_kits_e2e.py       # E2E validation and conformance test suite
-└── docs/
-    └── EXECUTION_PLAN.md          # Architectural execution plan
+│   └── test_sbx_kits_e2e.py      # E2E validation and conformance test suite
+└── LICENSE                       # MIT License
 ```
 
 ---
@@ -47,12 +48,12 @@ sbx-kits/
 
 | Kit | Kind | Provided Tools | Injected Skills | Network & Credential Grants |
 | :--- | :--- | :--- | :--- | :--- |
-| **`antigravity-kit-v3`** | `workload` | `antigravity`, `agy` | Skill mount point: `~/.gemini/config/skills` | `generativelanguage.googleapis.com`<br>`api.github.com`<br>`GEMINI_API_KEY` proxy injection<br>Google OAuth proxy session |
-| **`python-ml-mixin`** | `mixin` | `uv`, `ruff`, `jupytext`, `nbstripout` | `notebook-uv-workflow` | `pypi.org`, `files.pythonhosted.org` |
-| **`colab-mixin`** | `mixin` | `colab` | `colab-operator` | `colab.research.google.com`, `oauth2.googleapis.com`<br>Headless `PlaintextKeyring` |
-| **`kaggle-mixin`** | `mixin` | `kaggle` | `kaggle-cli` | `api.kaggle.com`, `storage.googleapis.com`<br>`KAGGLE_API_TOKEN` proxy injection |
-| **`playwright-mcp-mixin`** | `mixin` | `playwright-mcp` | `browser-automation` | `*` (browser egress)<br>Local stdio MCP server, no credentials |
-| **`agy-colab-kaggle-kit`** | `set` | *All 8 tools combined* | *All 3 skills combined* | Complete merged policy; excludes Playwright MCP |
+| **`antigravity`** | `workload` | `antigravity`, `agy` | Skill mount point: `~/.gemini/config/skills` | `generativelanguage.googleapis.com`<br>`api.github.com`<br>`GEMINI_API_KEY` proxy injection<br>Google OAuth proxy session |
+| **`python-ml`** | `mixin` | `uv`, `ruff`, `jupytext`, `nbstripout` | `notebook-uv-workflow` | `pypi.org`, `files.pythonhosted.org` |
+| **`colab`** | `mixin` | `colab` | `colab-operator` | `colab.research.google.com`, `oauth2.googleapis.com`<br>Headless `PlaintextKeyring` |
+| **`kaggle`** | `mixin` | `kaggle` | `kaggle-cli` | `api.kaggle.com`, `storage.googleapis.com`<br>`KAGGLE_API_TOKEN` proxy injection |
+| **`playwright-mcp`** | `mixin` | `playwright-mcp` | `browser-automation` | `*` (browser egress)<br>Local stdio MCP server, no credentials |
+| **`agy-colab-kaggle`** | `set` | *All 8 tools combined* | *All 3 skills combined* | Complete merged policy; excludes Playwright MCP |
 
 ---
 
@@ -114,11 +115,11 @@ docker buildx inspect kit-builder >/dev/null 2>&1 || \
   docker buildx create --name kit-builder --driver docker-container --bootstrap
 
 for entry in \
-  antigravity-kit-v3:antigravity.yaml \
-  python-ml-mixin:python-ml.yaml \
-  colab-mixin:colab.yaml \
-  kaggle-mixin:kaggle.yaml \
-  playwright-mcp-mixin:playwright-mcp.yaml; do
+  antigravity:antigravity.yaml \
+  python-ml:python-ml.yaml \
+  colab:colab.yaml \
+  kaggle:kaggle.yaml \
+  playwright-mcp:playwright-mcp.yaml; do
   dir=${entry%%:*}; file=${entry#*:}
   (cd "kits/$dir" && docker buildx build --builder kit-builder . -f "$file" --output type=cacheonly)
 done
@@ -126,24 +127,24 @@ done
 
 Inspect the resolved declarations without starting a sandbox. Keep the `SBX_KIT_BUILDER=sandbox` prefix; without it `sbx` uses the default `docker` driver, which cannot export the OCI layout this error reports:
 ```bash
-SBX_KIT_BUILDER=sandbox sbx kit inspect ./kits/python-ml-mixin
+SBX_KIT_BUILDER=sandbox sbx kit inspect ./kits/python-ml
 ```
 
-The same command on `./kits/agy-colab-kaggle-kit` will still fail until the four member images are pushed, because v3 sets must reference published OCI images. Until then, use the local `sbx run` composition in step 4. Its composition is also checked statically by the built-in conformance suite:
+The same command on `./kits/agy-colab-kaggle` will still fail until the four member images are pushed, because v3 sets must reference published OCI images. Until then, use the local `sbx run` composition in step 4. Its composition is also checked statically by the built-in conformance suite:
 ```bash
 python3 tests/test_sbx_kits_e2e.py
 ```
 
 ### 4. Run Locally (No Push Required)
 
-You can run sandboxes directly from local kit source directories using `sbx run`. Keep the `SBX_KIT_BUILDER=sandbox` prefix on every local run; the default `docker` driver fails with `OCI exporter is not supported for the docker driver`. Local Python/Colab/Kaggle mixins share `docker.io/sbx/shell-docker-image:latest` as their base so the in-sandbox Docker daemon and CLI shims survive composition. The optional Playwright mixin uses `docker.io/sbx/antigravity-image:latest` as its final base and stages Node, Chromium, and the browser runtime libraries under `/opt/playwright-mcp-mixin`.
+You can run sandboxes directly from local kit source directories using `sbx run`. Keep the `SBX_KIT_BUILDER=sandbox` prefix on every local run; the default `docker` driver fails with `OCI exporter is not supported for the docker driver`. Local Python/Colab/Kaggle mixins share `docker.io/sbx/shell-docker-image:latest` as their base so the in-sandbox Docker daemon and CLI shims survive composition. The optional Playwright mixin uses `docker.io/sbx/antigravity-image:latest` as its final base and stages Node, Chromium, and the browser runtime libraries under `/opt/playwright-mcp`.
 
 #### Run with Individual Mixins:
 ```bash
-SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity-kit-v3 \
-  --kit ./kits/python-ml-mixin \
-  --kit ./kits/colab-mixin \
-  --kit ./kits/kaggle-mixin \
+SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity \
+  --kit ./kits/python-ml \
+  --kit ./kits/colab \
+  --kit ./kits/kaggle \
   --kit-arg auth_method=consumer \
   .
 ```
@@ -152,8 +153,8 @@ SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity-kit-v3 \
 
 Plugin mixins are not part of the master set. Add only the ones a session needs:
 ```bash
-SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity-kit-v3 \
-  --kit ./kits/playwright-mcp-mixin \
+SBX_KIT_BUILDER=sandbox sbx run ./kits/antigravity \
+  --kit ./kits/playwright-mcp \
   --kit-arg auth_method=consumer \
   .
 ```
@@ -162,7 +163,7 @@ Use `--kit-arg auth_method=gcp --kit-arg gcp_project=<project> --kit-arg gcp_loc
 
 #### Run the Master Composed Set:
 ```bash
-SBX_KIT_BUILDER=sandbox sbx run ./kits/agy-colab-kaggle-kit .
+SBX_KIT_BUILDER=sandbox sbx run ./kits/agy-colab-kaggle .
 ```
 
 ### 5. Build and Publish Kits to GitHub Container Registry (`ghcr.io`)
@@ -176,35 +177,35 @@ echo "$GHCR_PAT" | docker login ghcr.io -u danielmcstr --password-stdin
 
 # Build and push leaf kit images (note each kit's own directory is the build context)
 docker buildx build --builder kit-builder --platform linux/amd64 \
-  -f kits/antigravity-kit-v3/antigravity.yaml \
+  -f kits/antigravity/antigravity.yaml \
   --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
-  -t ghcr.io/danielmcstr/sbx-kits/antigravity:latest --push ./kits/antigravity-kit-v3
+  -t ghcr.io/danielmcstr/sbx-kits/antigravity:latest --push ./kits/antigravity
 
 docker buildx build --builder kit-builder --platform linux/amd64 \
-  -f kits/python-ml-mixin/python-ml.yaml \
+  -f kits/python-ml/python-ml.yaml \
   --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
-  -t ghcr.io/danielmcstr/sbx-kits/python-ml:latest --push ./kits/python-ml-mixin
+  -t ghcr.io/danielmcstr/sbx-kits/python-ml:latest --push ./kits/python-ml
 
 docker buildx build --builder kit-builder --platform linux/amd64 \
-  -f kits/colab-mixin/colab.yaml \
+  -f kits/colab/colab.yaml \
   --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
-  -t ghcr.io/danielmcstr/sbx-kits/colab:latest --push ./kits/colab-mixin
+  -t ghcr.io/danielmcstr/sbx-kits/colab:latest --push ./kits/colab
 
 docker buildx build --builder kit-builder --platform linux/amd64 \
-  -f kits/kaggle-mixin/kaggle.yaml \
+  -f kits/kaggle/kaggle.yaml \
   --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
-  -t ghcr.io/danielmcstr/sbx-kits/kaggle:latest --push ./kits/kaggle-mixin
+  -t ghcr.io/danielmcstr/sbx-kits/kaggle:latest --push ./kits/kaggle
 
 docker buildx build --builder kit-builder --platform linux/amd64 \
-  -f kits/playwright-mcp-mixin/playwright-mcp.yaml \
+  -f kits/playwright-mcp/playwright-mcp.yaml \
   --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
-  -t ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest --push ./kits/playwright-mcp-mixin
+  -t ghcr.io/danielmcstr/sbx-kits/playwright-mcp:latest --push ./kits/playwright-mcp
 
 # Build and publish the master set (after the 4 member images exist in ghcr.io)
 docker buildx build --builder kit-builder \
-  -f kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml \
+  -f kits/agy-colab-kaggle/agy-colab-kaggle.yaml \
   --annotation "index,manifest:org.opencontainers.image.source=https://github.com/danielmcstr/sbx-kits" \
-  -t ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest --push ./kits/agy-colab-kaggle-kit
+  -t ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest --push ./kits/agy-colab-kaggle
 ```
 
 > **Note:** On personal GitHub accounts, verify each newly created package under `https://github.com/danielmcstr?tab=packages` is set to **Public** (*Package settings → Danger Zone → Change visibility*) so anonymous `sbx run` pulls succeed without `docker login`.
@@ -222,7 +223,7 @@ Once inside the interactive Antigravity sandbox session:
     - `notebook-uv-workflow`
     - `colab-operator`
     - `kaggle-cli`
-    - `browser-automation` when `playwright-mcp-mixin` was selected
+    - `browser-automation` when `playwright-mcp` was selected
 
 2. **Verify Toolchains**:
 
@@ -271,7 +272,7 @@ Once inside the interactive Antigravity sandbox session:
 
 ## Workspace Session Persistence
 
-`antigravity-kit-v3` automatically persists Antigravity conversation history and artifacts into a git-excluded directory inside the mounted workspace (`.sbx-agy/` by default), so deleting a sandbox (`sbx rm`) and creating a new one on the same repository preserves all past sessions for `/resume` and `agy --continue`.
+`antigravity` automatically persists Antigravity conversation history and artifacts into a git-excluded directory inside the mounted workspace (`.sbx-agy/` by default), so deleting a sandbox (`sbx rm`) and creating a new one on the same repository preserves all past sessions for `/resume` and `agy --continue`.
 
 ### How It Works Safely
 - **Local live SQLite + checkpointed snapshots**: `agy` keeps its live SQLite WAL files on fast local container storage and snapshots them every 20 seconds (plus on exit) using SQLite's online backup API + atomic rename — avoiding SQLite WAL corruption over `virtiofs`.

@@ -18,7 +18,7 @@ This document explains how to version, tag, publish, and verify a new release of
 | Stable tag (`v1.2.3`) | `:1.2.3`, `:1.2`, `:latest`, `:sha-<short>` | Yes | Yes (Latest release) |
 | Pre-release tag (`v1.2.3-rc.1`) | `:1.2.3-rc.1`, `:sha-<short>` | **No** | Yes (Pre-release) |
 
-- **Master kit set reproducibility:** In git, `kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml` references `:latest` for ongoing `main` builds. When CI builds a tagged release (`vX.Y.Z`), it automatically pins the 4 member refs in `agy-colab-kaggle.yaml` to `:X.Y.Z` so every versioned set release resolves the exact member kit versions built for that release.
+- **Master kit set reproducibility:** In git, `kits/agy-colab-kaggle/agy-colab-kaggle.yaml` references `:latest` for ongoing `main` builds. When CI builds a tagged release (`vX.Y.Z`), it automatically pins the 4 member refs in `agy-colab-kaggle.yaml` to `:X.Y.Z` so every versioned set release resolves the exact member kit versions built for that release.
 
 ---
 

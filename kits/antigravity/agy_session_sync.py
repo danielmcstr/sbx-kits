@@ -162,7 +162,7 @@ def ensure_git_ignored(workspace_dir: Path, store_dir: Path) -> None:
     inner_ignore = store_dir / ".gitignore"
     if not inner_ignore.exists():
         inner_ignore.write_text(
-            "# Managed by antigravity-kit-v3 session persistence.\n"
+            "# Managed by antigravity session persistence.\n"
             "# Never commit Antigravity session databases or transcripts.\n"
             "*\n",
             encoding="utf-8",

@@ -66,19 +66,19 @@ jobs:
       matrix:
         include:
           - name: antigravity
-            dir: kits/antigravity-kit-v3
+            dir: kits/antigravity
             file: antigravity.yaml
           - name: python-ml
-            dir: kits/python-ml-mixin
+            dir: kits/python-ml
             file: python-ml.yaml
           - name: colab
-            dir: kits/colab-mixin
+            dir: kits/colab
             file: colab.yaml
           - name: kaggle
-            dir: kits/kaggle-mixin
+            dir: kits/kaggle
             file: kaggle.yaml
           - name: playwright-mcp
-            dir: kits/playwright-mcp-mixin
+            dir: kits/playwright-mcp
             file: playwright-mcp.yaml
     steps:
       - name: Checkout repository
@@ -138,9 +138,9 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          sed -i "s|:latest$|:${version}|g" kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml
+          sed -i "s|:latest$|:${version}|g" kits/agy-colab-kaggle/agy-colab-kaggle.yaml
           echo "Pinned master set descriptor for release ${version}:"
-          cat kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml
+          cat kits/agy-colab-kaggle/agy-colab-kaggle.yaml
 
       - name: Set up Docker Buildx (docker-container driver)
         uses: docker/setup-buildx-action@v3
@@ -168,8 +168,8 @@ jobs:
       - name: Build and push master kit set
         uses: docker/build-push-action@v6
         with:
-          context: ./kits/agy-colab-kaggle-kit
-          file: ./kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml
+          context: ./kits/agy-colab-kaggle
+          file: ./kits/agy-colab-kaggle/agy-colab-kaggle.yaml
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           annotations: |
@@ -228,12 +228,12 @@ jobs:
           } > "${notes_file}"
 
           for entry in \
-            "antigravity:kits/antigravity-kit-v3/antigravity.yaml" \
-            "python-ml:kits/python-ml-mixin/python-ml.yaml" \
-            "colab:kits/colab-mixin/colab.yaml" \
-            "kaggle:kits/kaggle-mixin/kaggle.yaml" \
-            "playwright-mcp:kits/playwright-mcp-mixin/playwright-mcp.yaml" \
-            "agy-colab-kaggle:kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml"; do
+            "antigravity:kits/antigravity/antigravity.yaml" \
+            "python-ml:kits/python-ml/python-ml.yaml" \
+            "colab:kits/colab/colab.yaml" \
+            "kaggle:kits/kaggle/kaggle.yaml" \
+            "playwright-mcp:kits/playwright-mcp/playwright-mcp.yaml" \
+            "agy-colab-kaggle:kits/agy-colab-kaggle/agy-colab-kaggle.yaml"; do
             name="${entry%%:*}"
             yaml_path="${entry#*:}"
             image="${REGISTRY}/${repo_lower}/${name}:${version}"
