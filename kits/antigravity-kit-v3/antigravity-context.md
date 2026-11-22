@@ -13,3 +13,8 @@
 ## Credentials & Zero-Trust Security
 - Credentials (such as `GEMINI_API_KEY`, `KAGGLE_API_TOKEN`, OAuth tokens) are transparently injected by the Docker Sandbox proxy.
 - Local values may contain sentinel proxy tokens. Never log, disclose, or attempt to overwrite proxy tokens with manual secrets.
+
+## Workspace Session Persistence
+- Antigravity sessions are persisted into a git-excluded workspace directory (default `.sbx-agy/`) so conversations survive sandbox deletion and recreation.
+- Never stage, commit, or force-add `.sbx-agy/` (or a custom `session_dir`) into git.
+- Inspect or manually flush persisted session state with `agy-session status`, `agy-session list`, or `agy-session sync`.

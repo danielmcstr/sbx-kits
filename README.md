@@ -269,6 +269,34 @@ Once inside the interactive Antigravity sandbox session:
 
 ---
 
+## Workspace Session Persistence
+
+`antigravity-kit-v3` automatically persists Antigravity conversation history and artifacts into a git-excluded directory inside the mounted workspace (`.sbx-agy/` by default), so deleting a sandbox (`sbx rm`) and creating a new one on the same repository preserves all past sessions for `/resume` and `agy --continue`.
+
+### How It Works Safely
+- **Local live SQLite + checkpointed snapshots**: `agy` keeps its live SQLite WAL files on fast local container storage and snapshots them every 20 seconds (plus on exit) using SQLite's online backup API + atomic rename — avoiding SQLite WAL corruption over `virtiofs`.
+- **Zero git leakage**: Automatically adds `.sbx-agy/` to repo-local `.git/info/exclude` (never modifying your tracked `.gitignore`) and places a self-ignoring `*` `.gitignore` inside `.sbx-agy/`. Credentials (`antigravity-oauth-token`), logs, and binaries are never persisted.
+- **Multi-sandbox cooperative merge**: Multiple sandboxes running on the same repository can each work on their own conversations and merge them into the same `.sbx-agy/` store (`conversations/<uuid>.db`, `brain/<uuid>/`, `conversation_summaries.db` including FTS5 search, and `history.jsonl`). Avoid resuming the exact same conversation UUID simultaneously in two sandboxes; active-UUID claims guard against accidental clobbering.
+
+### Kit Arguments & CLI Helper
+```bash
+# Default: persistence enabled into .sbx-agy/, manual /resume or --continue
+sbx run ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest --kit-arg auth_method=consumer .
+
+# Automatically resume the latest conversation on startup
+sbx run ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest \
+  --kit-arg auth_method=consumer \
+  --kit-arg auto_resume=true .
+
+# Disable persistence or choose a custom workspace-relative directory
+sbx run ghcr.io/danielmcstr/sbx-kits/agy-colab-kaggle:latest \
+  --kit-arg persist_sessions=false .
+```
+
+Inside a sandbox, use `agy-session status`, `agy-session list`, or `agy-session sync` to inspect or flush immediately. Delete `.sbx-agy/` in your workspace to reset all persisted sessions.
+
+---
+
 ## Releasing
 
 See [RELEASE.md](RELEASE.md) for the versioning policy, tag-based release procedure, and automated GHCR + GitHub Release pipeline.

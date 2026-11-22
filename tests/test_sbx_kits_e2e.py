@@ -13,6 +13,10 @@ Validates:
 import sys
 import os
 import re
+import json
+import sqlite3
+import subprocess
+import tempfile
 from pathlib import Path
 
 # Color helpers
@@ -298,6 +302,241 @@ def test_e2e_composition():
     print(f"  ✓ Mixins resolved: {', '.join(resolved_kinds['mixin'])}")
     print(f"  ✓ Total provided tools: {len(all_provides)} {sorted(list(all_provides))}")
     print(f"  ✓ Dynamic skills assembled into Antigravity workload: {sorted(all_skills)}")
+
+
+def _create_summaries_db(db_path: Path, rows: list[tuple[str, str, int, str, str]]) -> sqlite3.Connection:
+    """Create a WAL-mode conversation_summaries.db matching Antigravity CLI schema."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS conversation_summaries (
+            conversation_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT "",
+            preview TEXT NOT NULL DEFAULT "",
+            step_count INTEGER NOT NULL DEFAULT 0,
+            last_modified_time DATETIME NOT NULL,
+            workspace_uris TEXT NOT NULL DEFAULT ""
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS conversation_parents (
+            conversation_id TEXT PRIMARY KEY,
+            parent_id TEXT NOT NULL
+        ) WITHOUT ROWID
+        """
+    )
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
+            conversation_id UNINDEXED,
+            title,
+            user_body
+        )
+        """
+    )
+    for cid, title, steps, mtime, body in rows:
+        conn.execute(
+            "INSERT OR REPLACE INTO conversation_summaries "
+            "(conversation_id, title, preview, step_count, last_modified_time, workspace_uris) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (cid, title, body, steps, mtime, "/workspace"),
+        )
+        conn.execute("DELETE FROM conversations_fts WHERE conversation_id = ?", (cid,))
+        conn.execute(
+            "INSERT INTO conversations_fts (conversation_id, title, user_body) VALUES (?, ?, ?)",
+            (cid, title, body),
+        )
+    conn.commit()
+    return conn
+
+
+def _create_conv_db(db_path: Path, cid: str, message: str) -> sqlite3.Connection:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS steps (id INTEGER PRIMARY KEY, cid TEXT, msg TEXT)")
+    conn.execute("INSERT INTO steps (cid, msg) VALUES (?, ?)", (cid, message))
+    conn.commit()
+    return conn
+
+
+def _run_sync(args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess:
+    script = KITS_DIR / "antigravity-kit-v3" / "agy_session_sync.py"
+    return subprocess.run(
+        [sys.executable, str(script), *args],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_session_persistence():
+    print(f"\n{YELLOW}[6/6] Testing Workspace Session Persistence & Multi-Sandbox Merge...{RESET}")
+    agy_yaml = (KITS_DIR / "antigravity-kit-v3" / "antigravity.yaml").read_text(encoding="utf-8")
+    for required in ("persist_sessions:", "session_dir:", "auto_resume:", "persistence.json"):
+        assert required in agy_yaml, f"antigravity.yaml missing session persistence setting: {required}"
+
+    entrypoint = KITS_DIR / "antigravity-kit-v3" / "agy-entrypoint.sh"
+    bash_check = subprocess.run(["bash", "-n", str(entrypoint)], capture_output=True, text=True)
+    assert bash_check.returncode == 0, f"agy-entrypoint.sh syntax error: {bash_check.stderr}"
+
+    with tempfile.TemporaryDirectory(prefix="sbx-kits-persist-test-") as tmp_root:
+        root = Path(tmp_root)
+        ws = root / "repo"
+        ws.mkdir()
+        subprocess.run(["git", "-C", str(ws), "init", "-q"], check=True)
+        (ws / ".gitignore").write_text("*.log\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(ws), "add", ".gitignore"], check=True)
+        subprocess.run(
+            ["git", "-C", str(ws), "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "init"],
+            check=True,
+        )
+
+        # --- Sandbox A ---
+        app_a = root / "sbx-a-app"
+        env_a = {
+            **os.environ,
+            "WORKSPACE_DIR": str(ws),
+            "SANDBOX_ID": "sandbox-a",
+            "SBX_AGY_APP_DATA_DIR": str(app_a),
+            "SBX_AGY_CONFIG_PATH": str(root / "cfg-a.json"),
+            "SBX_AGY_STATE_PATH": str(root / "state-a.json"),
+            "SBX_AGY_PERSIST": "true",
+            "SBX_AGY_AUTO_RESUME": "true",
+        }
+        assert _run_sync(["hydrate"], env_a).returncode == 0
+
+        # Create live WAL DBs + brain + metadata + decoy secrets/logs
+        conv_a_conn = _create_conv_db(app_a / "conversations" / "uuid-a.db", "uuid-a", "hello from sandbox A")
+        sum_a_conn = _create_summaries_db(
+            app_a / "conversation_summaries.db",
+            [("uuid-a", "Session A", 3, "2026-11-22T00:01:00Z", "alpha keyword")],
+        )
+        (app_a / "brain" / "uuid-a").mkdir(parents=True, exist_ok=True)
+        (app_a / "brain" / "uuid-a" / "plan.md").write_text("# Plan A\n", encoding="utf-8")
+        (app_a / "cache").mkdir(parents=True, exist_ok=True)
+        (app_a / "cache" / "last_conversations.json").write_text(
+            json.dumps({str(ws): "uuid-a"}), encoding="utf-8"
+        )
+        (app_a / "history.jsonl").write_text('{"prompt":"prompt A"}\n', encoding="utf-8")
+        # Decoy secrets/logs that MUST NEVER be persisted
+        (app_a / "antigravity-oauth-token").write_text("sentinel-secret", encoding="utf-8")
+        (app_a / "settings.json").write_text('{"agentMode":"accept-edits"}', encoding="utf-8")
+        (app_a / "log").mkdir(parents=True, exist_ok=True)
+        (app_a / "log" / "cli.log").write_text("debug log", encoding="utf-8")
+
+        # Push while WAL connections are still OPEN (live checkpoint test)
+        res_a = _run_sync(["push"], env_a)
+        assert res_a.returncode == 0, f"Sandbox A push failed: {res_a.stderr}"
+
+        store = ws / ".sbx-agy"
+        assert (store / "conversations" / "uuid-a.db").is_file()
+        assert not (store / "conversations" / "uuid-a.db-wal").exists()
+        assert not (store / "conversations" / "uuid-a.db-shm").exists()
+        assert not (store / "antigravity-oauth-token").exists(), "OAuth token must never be persisted!"
+        assert not (store / "settings.json").exists(), "settings.json must not be persisted!"
+        assert not (store / "log").exists(), "logs must not be persisted!"
+
+        # Verify git cleanliness (tracked .gitignore untouched, .sbx-agy ignored via info/exclude)
+        git_st = subprocess.run(["git", "-C", str(ws), "status", "--porcelain"], capture_output=True, text=True, check=True)
+        assert git_st.stdout.strip() == "", f"Workspace git status dirtied: {git_st.stdout!r}"
+        assert (ws / ".gitignore").read_text(encoding="utf-8") == "*.log\n"
+        assert ".sbx-agy/" in (ws / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+
+        # --- Sandbox B running SIMULTANEOUSLY on the same workspace ---
+        app_b = root / "sbx-b-app"
+        env_b = {
+            **os.environ,
+            "WORKSPACE_DIR": str(ws),
+            "SANDBOX_ID": "sandbox-b",
+            "SBX_AGY_APP_DATA_DIR": str(app_b),
+            "SBX_AGY_CONFIG_PATH": str(root / "cfg-b.json"),
+            "SBX_AGY_STATE_PATH": str(root / "state-b.json"),
+            "SBX_AGY_PERSIST": "true",
+            "SBX_AGY_AUTO_RESUME": "true",
+        }
+        assert _run_sync(["hydrate"], env_b).returncode == 0
+        assert (app_b / "conversations" / "uuid-a.db").is_file()
+        assert _run_sync(["should-auto-resume"], env_b).returncode == 0
+
+        # Sandbox B creates its OWN conversation uuid-b AND also simulates a conflict attempt on uuid-a
+        conv_b_conn = _create_conv_db(app_b / "conversations" / "uuid-b.db", "uuid-b", "hello from sandbox B")
+        sum_b_conn = _create_summaries_db(
+            app_b / "conversation_summaries.db",
+            [("uuid-b", "Session B", 5, "2026-11-22T00:02:00Z", "beta keyword")],
+        )
+        # Attempt to tamper with uuid-a from Sandbox B while Sandbox A holds an active claim on uuid-a
+        tamper_conn = _create_conv_db(app_b / "conversations" / "uuid-a.db", "uuid-a", "conflicting write from B")
+        (app_b / "brain" / "uuid-b").mkdir(parents=True, exist_ok=True)
+        (app_b / "brain" / "uuid-b" / "notes.md").write_text("# Notes B\n", encoding="utf-8")
+        (app_b / "history.jsonl").write_text('{"prompt":"prompt A"}\n{"prompt":"prompt B"}\n', encoding="utf-8")
+
+        res_b = _run_sync(["push"], env_b)
+        assert res_b.returncode == 0, f"Sandbox B push failed: {res_b.stderr}"
+        assert "skipping to avoid conflict" in res_b.stderr, "Active-UUID conflict guard did not trigger!"
+
+        conv_a_conn.close()
+        sum_a_conn.close()
+        conv_b_conn.close()
+        sum_b_conn.close()
+        tamper_conn.close()
+
+        # Release claims on exit
+        assert _run_sync(["push", "--release-lock"], env_a).returncode == 0
+        assert _run_sync(["push", "--release-lock"], env_b).returncode == 0
+
+        # --- Sandbox C (fresh sandbox after A & B are deleted) ---
+        app_c = root / "sbx-c-app"
+        env_c = {
+            **os.environ,
+            "WORKSPACE_DIR": str(ws),
+            "SANDBOX_ID": "sandbox-c",
+            "SBX_AGY_APP_DATA_DIR": str(app_c),
+            "SBX_AGY_CONFIG_PATH": str(root / "cfg-c.json"),
+            "SBX_AGY_STATE_PATH": str(root / "state-c.json"),
+            "SBX_AGY_PERSIST": "true",
+        }
+        assert _run_sync(["hydrate"], env_c).returncode == 0
+
+        # Verify BOTH uuid-a and uuid-b survived and uuid-a was NOT clobbered by B
+        for cid, expected_msg in (("uuid-a", "hello from sandbox A"), ("uuid-b", "hello from sandbox B")):
+            db_c = app_c / "conversations" / f"{cid}.db"
+            assert db_c.is_file(), f"Missing restored conversation {cid}"
+            conn = sqlite3.connect(str(db_c))
+            assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            msgs = [r[0] for r in conn.execute("SELECT msg FROM steps")]
+            conn.close()
+            assert expected_msg in msgs, f"Expected {expected_msg!r} in {cid}, got {msgs}"
+            assert "conflicting write from B" not in msgs, f"Conflict guard failed for {cid}!"
+
+        # Verify merged conversation_summaries.db + FTS5 has BOTH sessions
+        sconn = sqlite3.connect(str(app_c / "conversation_summaries.db"))
+        assert sconn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        ids = {r[0] for r in sconn.execute("SELECT conversation_id FROM conversation_summaries")}
+        assert ids == {"uuid-a", "uuid-b"}, f"Expected both summaries merged, got {ids}"
+        fts_a = [r[0] for r in sconn.execute("SELECT conversation_id FROM conversations_fts WHERE conversations_fts MATCH 'alpha'")]
+        fts_b = [r[0] for r in sconn.execute("SELECT conversation_id FROM conversations_fts WHERE conversations_fts MATCH 'beta'")]
+        sconn.close()
+        assert fts_a == ["uuid-a"] and fts_b == ["uuid-b"], f"FTS5 merge failed: {fts_a}, {fts_b}"
+
+        # Verify artifacts & merged history
+        assert (app_c / "brain" / "uuid-a" / "plan.md").is_file()
+        assert (app_c / "brain" / "uuid-b" / "notes.md").is_file()
+        hist_lines = (app_c / "history.jsonl").read_text(encoding="utf-8").splitlines()
+        assert '{"prompt":"prompt A"}' in hist_lines and '{"prompt":"prompt B"}' in hist_lines
+
+        # Verify CLI status & list helpers
+        assert _run_sync(["status"], env_c).returncode == 0
+        list_res = _run_sync(["list"], env_c)
+        assert list_res.returncode == 0 and "uuid-a" in list_res.stdout and "uuid-b" in list_res.stdout
+
+    print("  ✓ SQLite WAL online backup, git exclusion, and credential filtering verified")
+    print("  ✓ Multi-sandbox cooperative merge (summaries + FTS5 + active-UUID guard) verified")
     print(f"\n{GREEN}All E2E validation and conformance tests PASSED successfully!{RESET}\n")
 
 
@@ -308,6 +547,7 @@ def main():
         test_skills_frontmatter()
         test_zero_trust_proxy_policies()
         test_e2e_composition()
+        test_session_persistence()
     except AssertionError as e:
         print(f"\n{RED}TEST FAILED: {e}{RESET}")
         sys.exit(1)

@@ -3,7 +3,7 @@ schemaVersion: "3"
 kind: workload
 displayName: Antigravity Agent Workload (v3)
 description: Antigravity autonomous agent workload with skills discovery, git identity, Gemini API key, and Google OAuth credentials.
-version: "1.0.0"
+version: "1.1.0"
 
 args:
   auth_method:
@@ -16,6 +16,17 @@ args:
   gcp_location:
     default: global
     description: Google Cloud location used with gcp authentication
+  persist_sessions:
+    default: "true"
+    enum: ["true", "false"]
+    description: Persist Antigravity sessions into a git-excluded workspace folder across sandbox recreations
+  session_dir:
+    default: ".sbx-agy"
+    description: Workspace-relative directory used to store persisted Antigravity sessions
+  auto_resume:
+    default: "false"
+    enum: ["true", "false"]
+    description: Automatically pass --continue on startup when a prior session exists for the workspace
 
 provides:
   - antigravity
@@ -147,3 +158,22 @@ capabilities:
           user: agent
           env: [WORKSPACE_DIR]
           description: Seed permissive Antigravity settings for sandboxed operation
+        - command: |
+            set -eu
+            cfg_dir="$HOME/.config/sbx-agy"
+            mkdir -p "$cfg_dir"
+            python3 - <<'PY' "${{ kit.args.persist_sessions }}" "${{ kit.args.session_dir }}" "${{ kit.args.auto_resume }}" "$cfg_dir/persistence.json"
+            import json, sys
+            persist, session_dir, auto_resume, dest = sys.argv[1:5]
+            payload = {
+                "persist_sessions": persist.lower() == "true",
+                "session_dir": session_dir,
+                "auto_resume": auto_resume.lower() == "true",
+            }
+            with open(dest, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, indent=2)
+                fh.write("\n")
+            PY
+            chmod 0600 "$cfg_dir/persistence.json"
+          user: agent
+          description: Write Antigravity workspace session persistence configuration
