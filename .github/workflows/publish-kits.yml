@@ -187,6 +187,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -259,7 +261,9 @@ jobs:
           fi
 
           if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Updating existing release ${tag}..."
             gh release edit "${tag}" --title "${tag}" --notes-file "${notes_file}" "${prerelease_args[@]}"
           else
-            gh release create "${tag}" --title "${tag}" --notes-file "${notes_file}" "${prerelease_args[@]}"
+            echo "Creating new release ${tag}..."
+            gh release create "${tag}" --verify-tag --title "${tag}" --notes-file "${notes_file}" "${prerelease_args[@]}"
           fi
