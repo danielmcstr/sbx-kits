@@ -51,17 +51,17 @@ RUN set -eu; \
       done < /tmp/ldd-next; \
       cp /tmp/ldd-targets.new /tmp/ldd-targets; \
       i=$((i + 1)); \
-    done
+    done; \
+    chmod -R a+rX /opt/playwright-mcp-mixin
 
 FROM docker.io/sbx/antigravity-image:latest
 
 USER root
 
 COPY --from=browser-env /opt/playwright-mcp-mixin /opt/playwright-mcp-mixin
-
-COPY install-mcp-config.js /opt/playwright-mcp-mixin/install-mcp-config.js
-COPY skills/browser-automation/SKILL.md /usr/share/playwright-mcp-mixin/skills/browser-automation/SKILL.md
-
-RUN chmod -R a+rX /opt/playwright-mcp-mixin /usr/share/playwright-mcp-mixin
+COPY --chmod=0644 install-mcp-config.js /opt/playwright-mcp-mixin/install-mcp-config.js
+RUN mkdir -p /usr/share/playwright-mcp-mixin/skills/browser-automation \
+    && chmod -R a+rX /usr/share/playwright-mcp-mixin
+COPY --chmod=0644 skills/browser-automation/SKILL.md /usr/share/playwright-mcp-mixin/skills/browser-automation/SKILL.md
 
 USER agent

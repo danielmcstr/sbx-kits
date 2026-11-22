@@ -149,9 +149,9 @@ def test_companion_dockerfiles():
         for line in df_content.splitlines():
             line_str = line.strip()
             if line_str.startswith("COPY ") and not line_str.startswith("COPY --from="):
-                parts = line_str.split()
-                # e.g., COPY skills/colab-operator/SKILL.md /path/to/dest
-                src = parts[1]
+                parts = [p for p in line_str.split()[1:] if not p.startswith("--")]
+                # e.g., COPY [--chmod=0644] skills/colab-operator/SKILL.md /path/to/dest
+                src = parts[0]
                 src_path = kit_dir / src
                 assert src_path.exists(), f"COPY source '{src}' in {dockerfile_name} does not exist at {src_path}"
 

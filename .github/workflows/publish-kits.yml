@@ -120,8 +120,6 @@ jobs:
           annotations: |
             index,manifest:org.opencontainers.image.source=https://github.com/${{ github.repository }}
             index,manifest:org.opencontainers.image.licenses=MIT
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   build-set:
     name: Build master set (agy-colab-kaggle)
