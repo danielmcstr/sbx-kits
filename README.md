@@ -269,6 +269,12 @@ Once inside the interactive Antigravity sandbox session:
 
 ---
 
+## Releasing
+
+See [RELEASE.md](RELEASE.md) for the versioning policy, tag-based release procedure, and automated GHCR + GitHub Release pipeline.
+
+---
+
 ## License
 
 Licensed under the [MIT License](LICENSE).

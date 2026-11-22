@@ -15,13 +15,13 @@ concurrency:
 env:
   REGISTRY: ghcr.io
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
 
 jobs:
   validate:
     name: Conformance Tests
+    permissions:
+      contents: read
     if: >-
       github.actor == github.repository_owner &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -29,6 +29,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
+
+      - name: Validate release tag (semver and main ancestry)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release tag '${tag}' must follow semantic versioning (e.g. v1.0.0 or v1.1.0-rc.1)."
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Tagged commit $(git rev-parse --short HEAD) is not reachable from origin/main. Tag commits on main only."
+            exit 1
+          fi
+          echo "Tag ${tag} is valid semver and reachable from origin/main."
 
       - name: Run E2E conformance suite
         run: python3 tests/test_sbx_kits_e2e.py
@@ -36,6 +54,9 @@ jobs:
   build-kits:
     name: Build kit (${{ matrix.name }})
     needs: validate
+    permissions:
+      contents: read
+      packages: write
     if: >-
       github.actor == github.repository_owner &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -105,11 +126,23 @@ jobs:
   build-set:
     name: Build master set (agy-colab-kaggle)
     needs: build-kits
+    permissions:
+      contents: read
+      packages: write
     if: github.actor == github.repository_owner && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Pin master set member refs to release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sed -i "s|:latest$|:${version}|g" kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml
+          echo "Pinned master set descriptor for release ${version}:"
+          cat kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml
 
       - name: Set up Docker Buildx (docker-container driver)
         uses: docker/setup-buildx-action@v3
@@ -144,3 +177,91 @@ jobs:
           annotations: |
             index,manifest:org.opencontainers.image.source=https://github.com/${{ github.repository }}
             index,manifest:org.opencontainers.image.licenses=MIT
+
+  release:
+    name: Create GitHub Release
+    needs: [validate, build-kits, build-set]
+    permissions:
+      contents: write
+      packages: read
+    if: github.actor == github.repository_owner && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          repo_lower=$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          notes_file="/tmp/release-notes.md"
+
+          {
+            echo "## Quickstart"
+            echo ""
+            echo '```bash'
+            echo "# Run the pinned master kit set"
+            echo "sbx run ${REGISTRY}/${repo_lower}/agy-colab-kaggle:${version} \\"
+            echo "  --kit-arg auth_method=consumer \\"
+            echo "  ."
+            echo ""
+            echo "# Optionally add the Playwright MCP plugin mixin"
+            echo "sbx run ${REGISTRY}/${repo_lower}/agy-colab-kaggle:${version} \\"
+            echo "  --kit ${REGISTRY}/${repo_lower}/playwright-mcp:${version} \\"
+            echo "  --kit-arg auth_method=consumer \\"
+            echo "  ."
+            echo '```'
+            echo ""
+            echo "## Published Container Images"
+            echo ""
+            echo "| Kit | Descriptor Version | Image | Digest |"
+            echo "| :--- | :--- | :--- | :--- |"
+          } > "${notes_file}"
+
+          for entry in \
+            "antigravity:kits/antigravity-kit-v3/antigravity.yaml" \
+            "python-ml:kits/python-ml-mixin/python-ml.yaml" \
+            "colab:kits/colab-mixin/colab.yaml" \
+            "kaggle:kits/kaggle-mixin/kaggle.yaml" \
+            "playwright-mcp:kits/playwright-mcp-mixin/playwright-mcp.yaml" \
+            "agy-colab-kaggle:kits/agy-colab-kaggle-kit/agy-colab-kaggle.yaml"; do
+            name="${entry%%:*}"
+            yaml_path="${entry#*:}"
+            image="${REGISTRY}/${repo_lower}/${name}:${version}"
+            digest=$(docker buildx imagetools inspect "${image}" | awk '/^Digest:/ {print $2; exit}')
+            kit_ver=$(awk -F': ' '/^version:/ {gsub(/"/, "", $2); print $2; exit}' "${yaml_path}")
+            kit_ver="${kit_ver:-set}"
+            printf '| `%s` | `%s` | `%s` | `%s` |\n' "${name}" "${kit_ver}" "${image}" "${digest}" >> "${notes_file}"
+          done
+
+          generated_notes=$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="${tag}" --jq '.body' 2>/dev/null || true)
+          if [ -n "${generated_notes}" ]; then
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "${generated_notes}"
+            } >> "${notes_file}"
+          fi
+
+          prerelease_args=()
+          if [[ "${tag}" == *-* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release edit "${tag}" --title "${tag}" --notes-file "${notes_file}" "${prerelease_args[@]}"
+          else
+            gh release create "${tag}" --title "${tag}" --notes-file "${notes_file}" "${prerelease_args[@]}"
+          fi
