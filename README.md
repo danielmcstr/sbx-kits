@@ -50,7 +50,7 @@ sbx-kits/
 | :--- | :--- | :--- | :--- | :--- |
 | **`antigravity`** | `workload` | `antigravity`, `agy` | Skill mount point: `~/.gemini/config/skills` | `generativelanguage.googleapis.com`<br>`api.github.com`<br>`GEMINI_API_KEY` proxy injection<br>Google OAuth proxy session |
 | **`python-ml`** | `mixin` | `uv`, `ruff`, `jupytext`, `nbstripout` | `notebook-uv-workflow` | `pypi.org`, `files.pythonhosted.org` |
-| **`colab`** | `mixin` | `colab` | `colab-operator` | `colab.research.google.com`, `oauth2.googleapis.com`<br>Headless `PlaintextKeyring` |
+| **`colab`** | `mixin` | `colab` | `colab-operator` | `colab.research.google.com`, `colab.pa.googleapis.com`, `**.colab.dev`<br>Dedicated OAuth proxy (`accounts.google.com/o/oauth2/token`) & sentinel `credentialFile` |
 | **`kaggle`** | `mixin` | `kaggle` | `kaggle-cli` | `api.kaggle.com`, `storage.googleapis.com`<br>`KAGGLE_API_TOKEN` proxy injection |
 | **`playwright-mcp`** | `mixin` | `playwright-mcp` | `browser-automation` | `*` (browser egress)<br>Local stdio MCP server, no credentials |
 | **`agy-colab-kaggle`** | `set` | *All 8 tools combined* | *All 3 skills combined* | Complete merged policy; excludes Playwright MCP |
@@ -241,7 +241,7 @@ Once inside the interactive Antigravity sandbox session:
      ```bash
      colab sessions
      ```
-     *Executes using headless keyring without prompting for GUI authentication.*
+     *Authenticates via the sandbox proxy (`accounts.google.com/o/oauth2/token`) using sentinel tokens only; after one-time OAuth capture, future sandboxes are pre-seeded automatically via `~/.config/colab-cli/token.json`.*
     - Kaggle CLI:
       ```bash
       kaggle datasets list

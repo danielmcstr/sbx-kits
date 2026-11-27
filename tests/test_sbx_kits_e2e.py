@@ -224,6 +224,57 @@ def test_zero_trust_proxy_policies():
     assert "credentialFile:" in antigravity_content, "Antigravity OAuth credential file is missing"
     print("  ✓ antigravity proxy-managed OAuth binding configured")
 
+    colab_content = (KITS_DIR / "colab" / "colab.yaml").read_text(encoding="utf-8")
+    assert "service: google-colab" in colab_content, "Colab OAuth service binding is missing"
+    assert "colab-at-proxy-managed" in colab_content, "Colab OAuth sentinels are missing"
+    assert "credentialFile:" in colab_content, "Colab OAuth credentialFile sentinel seed is missing"
+    assert "colab.pa.googleapis.com" in colab_content, "colab.yaml missing colab.pa.googleapis.com"
+    assert "**.colab.dev" in colab_content, "colab.yaml missing multi-label **.colab.dev runtime allowlist"
+    assert "client_secret" not in colab_content, "colab.yaml must not embed OAuth client_secret literals"
+
+    # Ensure no two kits in the composition collide on oauth.tokenEndpoint (host, path)
+    token_endpoints = {}
+    for kit_dir_name, yaml_name in (("antigravity", "antigravity.yaml"), ("colab", "colab.yaml")):
+        text = (KITS_DIR / kit_dir_name / yaml_name).read_text(encoding="utf-8")
+        m = re.search(
+            r"tokenEndpoint:\s*\n\s+host:\s*([^\s#]+)\s*\n\s+path:\s*([^\s#]+)",
+            text,
+        )
+        assert m, f"{yaml_name} missing oauth.tokenEndpoint host/path"
+        endpoint = (m.group(1), m.group(2))
+        assert endpoint not in token_endpoints, (
+            f"OAuth tokenEndpoint collision on {endpoint}: {token_endpoints[endpoint]} vs {kit_dir_name}"
+        )
+        token_endpoints[endpoint] = kit_dir_name
+    print(f"  ✓ Disjoint OAuth tokenEndpoints verified: {token_endpoints}")
+
+    # Unit-test kits/colab/_sbx_colab_oauth.py include_client_id injection
+    import types
+    fake_mod = types.ModuleType("requests_oauthlib")
+    captured_kwargs = {}
+
+    class _FakeOAuth2Session:
+        def fetch_token(self, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return {"access_token": "ok"}
+
+    fake_mod.OAuth2Session = _FakeOAuth2Session
+    prev_mod = sys.modules.get("requests_oauthlib")
+    sys.modules["requests_oauthlib"] = fake_mod
+    try:
+        ns = {}
+        exec((KITS_DIR / "colab" / "_sbx_colab_oauth.py").read_text(encoding="utf-8"), ns)
+        _FakeOAuth2Session().fetch_token("https://accounts.google.com/o/oauth2/token", code="abc")
+        assert captured_kwargs.get("include_client_id") is True, (
+            f"_sbx_colab_oauth.py did not default include_client_id=True: {captured_kwargs}"
+        )
+    finally:
+        if prev_mod is None:
+            sys.modules.pop("requests_oauthlib", None)
+        else:
+            sys.modules["requests_oauthlib"] = prev_mod
+    print("  ✓ colab _sbx_colab_oauth.py client_secret_post hook verified")
+
 
 def test_e2e_composition():
     print(f"\n{YELLOW}[5/6] Testing E2E Master Kit Set Composition...{RESET}")

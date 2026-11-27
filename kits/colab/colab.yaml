@@ -2,8 +2,8 @@
 schemaVersion: "3"
 kind: mixin
 displayName: Google Colab Mixin
-description: Mixin providing Google Colab CLI, headless keyring configuration, and colab-operator skill.
-version: "1.0.0"
+description: Mixin providing Google Colab CLI, zero-trust OAuth proxy mediation, headless keyring, and colab-operator skill.
+version: "1.1.0"
 
 provides:
   - colab
@@ -18,8 +18,11 @@ capabilities:
       runtime:
         allow:
           - colab.research.google.com
+          - colab.pa.googleapis.com
+          - "**.colab.dev"
           - accounts.google.com
           - oauth2.googleapis.com
+          - www.googleapis.com
           - pypi.org
           - files.pythonhosted.org
   - type: com.docker.sandbox/credential@1
@@ -30,10 +33,18 @@ capabilities:
       phase: runtime
       oauth:
         tokenEndpoint:
-          host: oauth2.googleapis.com
-          path: /token
+          host: accounts.google.com
+          path: /o/oauth2/token
         resourceHosts:
           - colab.research.google.com
+          - colab.pa.googleapis.com
         sentinels:
           accessToken: colab-at-proxy-managed
           refreshToken: colab-rt-proxy-managed
+        credentialFile:
+          path: ~/.config/colab-cli/token.json
+          structure:
+            token: "{{.AccessToken}}"
+            refresh_token: "{{.RefreshToken}}"
+            token_uri: https://accounts.google.com/o/oauth2/token
+            expiry: "2000-01-01T00:00:00Z"
